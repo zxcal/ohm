@@ -13,6 +13,11 @@ function Node(grammar, ctorName, children, interval) {
   this.interval = interval;
 }
 
+Node.newFor = function(grammar, ctorName, children, interval) {
+  var Ctor = grammar.constructors[ctorName].directConstructor;
+  return new Ctor(grammar, ctorName, children, interval);
+};
+
 Node.prototype.numChildren = function() {
   return this.children.length;
 };
@@ -103,8 +108,13 @@ TerminalNode.prototype.isTerminal = function() {
   return true;
 };
 
+function IterNode(grammar, children, interval) {
+  Node.call(this, grammar, '_iter', children, interval);
+}
+inherits(IterNode, Node);
+
 // --------------------------------------------------------------------
 // Exports
 // --------------------------------------------------------------------
 
-module.exports = {Node: Node, TerminalNode: TerminalNode};
+module.exports = {IterNode: IterNode, Node: Node, TerminalNode: TerminalNode};

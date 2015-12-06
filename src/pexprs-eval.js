@@ -11,6 +11,7 @@ var fsets = require('./fsets');
 var nodes = require('./nodes');
 var pexprs = require('./pexprs');
 
+var IterNode = nodes.IterNode;
 var Node = nodes.Node;
 var TerminalNode = nodes.TerminalNode;
 
@@ -161,7 +162,7 @@ pexprs.Iter.prototype.eval = function(state) {
         lastCol[lastCol.length - 1].interval.endIdx);
   }
   for (idx = 0; idx < cols.length; idx++) {
-    state.bindings.push(new Node(state.grammar, '_iter', cols[idx], interval));
+    state.bindings.push(new IterNode(state.grammar, cols[idx], interval));
   }
   return true;
 };
@@ -377,7 +378,7 @@ pexprs.Apply.prototype.evalOnce = function(expr, state) {
   if (state.eval(expr)) {
     var arity = expr.getArity();
     var bindings = state.bindings.splice(state.bindings.length - arity, arity);
-    var ans = new Node(state.grammar, this.ruleName, bindings, inputStream.interval(origPos));
+    var ans = Node.newFor(state.grammar, this.ruleName, bindings, inputStream.interval(origPos));
     return ans;
   } else {
     return false;

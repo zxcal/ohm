@@ -4,14 +4,16 @@
 // Imports
 // --------------------------------------------------------------------
 
+var inherits = require('inherits');
+
 var InputStream = require('./InputStream');
 var Interval = require('./Interval');
 var MatchResult = require('./MatchResult');
+var Node = require('./nodes').Node;
 var Semantics = require('./Semantics');
 var State = require('./State');
 var common = require('./common');
 var errors = require('./errors');
-var nodes = require('./nodes');
 var pexprs = require('./pexprs');
 
 // --------------------------------------------------------------------
@@ -50,7 +52,7 @@ Grammar.prototype = {
     // If the arguments are Node instances, try to construct the Node directly.
     // Otherwise, try to construct the node by matching the rule against the arguments.
     var ans;
-    if (children.length > 0 && children[0] instanceof nodes.Node) {
+    if (children.length > 0 && children[0] instanceof Node) {
       ans = this._constructWithChildNodes(ruleName, body, children);
     } else {
       ans = this._constructByMatching(ruleName, children);
@@ -84,23 +86,40 @@ Grammar.prototype = {
       return null;
     }
     var interval = new Interval(InputStream.newFor(children), 0, children.length);
-    return new nodes.Node(this, ruleName, children, interval);
+    return Node.newFor(this, ruleName, children, interval);
   },
 
   createConstructors: function() {
     var self = this;
-    var constructors = {};
 
+    // A way of cloning ruleBodies which seems to change the way V8 lays out the object,
+    // resulting ~3-4% better performance when compiling ohm.js with the ES5 grammar.
+    var constructors = JSON.parse(JSON.stringify(this.ruleBodies));
+
+    // Returns the actual constructor (i.e., to be used with `new`).
     function makeConstructor(ruleName) {
-      return function(/* val1, val2, ... */) {
+      var ctor = function(grammar, ctorName, children, interval) {
+        Node.call(this, grammar, ctorName, children, interval);
+      };
+      inherits(ctor, Node);
+      return ctor;
+    }
+
+    // Returns a factory function that should be invoked without `new`. To users, this will
+    // appear to be the actual constructor -- i.e., instanceof will work as expected.
+    function makeFactory(ruleName) {
+      var ctor = makeConstructor(ruleName);
+      var factory = function(/* val1, val2, ... */) {
         return self.construct(ruleName, Array.prototype.slice.call(arguments));
       };
+      factory.prototype = ctor.prototype;  // Trick to make `instanceof` work.
+      factory.directConstructor = ctor;
+      return factory;
     }
 
     for (var ruleName in this.ruleBodies) {
-      // We want *all* properties, not just own properties, because of
-      // supergrammars.
-      constructors[ruleName] = makeConstructor(ruleName);
+      // We want *all* properties, not just own properties, because of supergrammars.
+      constructors[ruleName] = makeFactory(ruleName);
     }
     return constructors;
   },
