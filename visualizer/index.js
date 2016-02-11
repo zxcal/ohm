@@ -6,8 +6,8 @@
 function $(sel) { return document.querySelector(sel); }
 var options = {};
 
-var inputEditor = CodeMirror.fromTextArea($('#input'));
-var grammarEditor = CodeMirror.fromTextArea($('#grammar'));
+var inputEditor = CodeMirror($('#inputContainer .editorWrapper'));
+var grammarEditor = CodeMirror($('#grammarContainer .editorWrapper'));
 
 // Misc Helpers
 // ------------
@@ -84,7 +84,7 @@ function restoreEditorState(editor, stateObj, key) {
 
 function saveEditorState(editor, stateObj, key) {
   stateObj[key] = toBase64(editor.getValue());
-  history.replaceState(null, '', '?' + QueryString.stringify(stateObj));
+  history.replaceState(null, '', '#' + QueryString.stringify(stateObj));
 }
 
 // Main
@@ -107,9 +107,9 @@ function saveEditorState(editor, stateObj, key) {
     cb.addEventListener('click', function(e) { triggerRefresh(); });
   });
 
-  var queryVars = QueryString.parse(window.location.search.slice(1));
-  restoreEditorState(inputEditor, queryVars, 'input');
-  restoreEditorState(grammarEditor, queryVars, 'grammar');
+  var hashVars = QueryString.parse(window.location.hash.slice(1));
+  restoreEditorState(inputEditor, hashVars, 'input');
+  restoreEditorState(grammarEditor, hashVars, 'grammar');
 
   inputEditor.on('change', function() { triggerRefresh(250); });
   grammarEditor.on('change', function() {
@@ -121,7 +121,7 @@ function saveEditorState(editor, stateObj, key) {
   function refresh() {
     hideError('input', inputEditor);
 
-    saveEditorState(inputEditor, queryVars, 'input');
+    saveEditorState(inputEditor, hashVars, 'input');
 
     // Refresh the option values.
     for (var i = 0; i < checkboxes.length; ++i) {
@@ -133,17 +133,20 @@ function saveEditorState(editor, stateObj, key) {
       grammarChanged = false;
 
       var grammarSrc = grammarEditor.getValue();
-      saveEditorState(grammarEditor, queryVars, 'grammar');
-      try {
-        grammar = ohm.grammar(grammarSrc);
-      } catch (e) {
-        console.log(e);  // eslint-disable-line no-console
+      saveEditorState(grammarEditor, hashVars, 'grammar');
 
-        var message = e.shortMessage ? e.shortMessage : e.message;
-        setError('grammar', grammarEditor, e.interval, message);
-        // If the grammar is unusable, prevent the input from being parsed.
-        grammar = null;
-        return;
+      if (grammarSrc.length > 0) {
+        try {
+          grammar = ohm.grammar(grammarSrc);
+        } catch (e) {
+          console.log(e);  // eslint-disable-line no-console
+
+          var message = e.shortMessage ? e.shortMessage : e.message;
+          setError('grammar', grammarEditor, e.interval, message);
+          // If the grammar is unusable, prevent the input from being parsed.
+          grammar = null;
+          return;
+        }
       }
     }
 
