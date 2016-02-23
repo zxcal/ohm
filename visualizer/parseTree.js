@@ -1,6 +1,6 @@
 /* eslint-env browser */
 /* global cmUtil, createElement, d3, getWidthDependentElements, grammarEditor, inputEditor */
-/* global options, setError */
+/* global options, setError, CodeMirror, restoreEditorState, grammar, semantics*/
 
 'use strict';
 
@@ -11,6 +11,8 @@ var UnicodeChars = {
   HORIZONTAL_ELLIPSIS: '\u2026',
   WHITE_BULLET: '\u25E6'
 };
+
+var inputMatchResult;
 
 // D3 Helpers
 // ----------
@@ -41,16 +43,38 @@ function toggleClasses(el, map) {
   }
 }
 
-function measureLabel(wrapperEl) {
+function measureSize(wrapperEl, selector) {
+  if (!wrapperEl.querySelector('.' + selector)) {
+    return {
+      width: 0,
+      height: 0
+    };
+  }
+
   var tempWrapper = $('#measuringDiv .pexpr');
-  var labelClone = wrapperEl.querySelector('.label').cloneNode(true);
-  var clone = tempWrapper.appendChild(labelClone);
+  var selectorClone = wrapperEl.querySelector('.' + selector).cloneNode(true);
+  var clone = tempWrapper.appendChild(selectorClone);
   var result = {
     width: clone.offsetWidth,
     height: clone.offsetHeight
   };
   tempWrapper.innerHTML = '';
   return result;
+}
+
+function measureContent(wrapperEl) {
+  var labelMeasurement = measureLabel(wrapperEl);
+
+  var semanticEditorMeasurement = measureSize(wrapperEl, 'semanticContainer');
+  var result = {
+    width: Math.max(semanticEditorMeasurement.width, labelMeasurement.width),
+    height: semanticEditorMeasurement.height
+  };
+  return result;
+}
+
+function measureLabel(wrapperEl) {
+  return measureSize(wrapperEl, 'label');
 }
 
 function measureChildren(wrapperEl) {
@@ -72,8 +96,8 @@ function measureInput(inputEl) {
   var span = measuringDiv.appendChild(createElement('span.input'));
   span.innerHTML = inputEl.textContent;
   var result = {
-    width: span.clientWidth,
-    height: span.clientHeight
+    width: span.offsetWidth,
+    height: span.offsetHeight
   };
   measuringDiv.removeChild(span);
   return result;
@@ -90,6 +114,9 @@ function initializeWidths() {
       el.style.minWidth = '0';
     } else {
       el.style.minWidth = measureInput(el._input).width + 'px';
+    }
+    if (el.classList.contains('hidden') && el.children.length === 1) {
+      el.style.display = 'none';
     }
   }
 
@@ -135,11 +162,14 @@ function toggleTraceElement(el) {
   el.classList.toggle('collapsed', !showing && children.childNodes.length > 0);
 
   var childrenSize = measureChildren(el);
-  var newWidth = showing ? childrenSize.width : measureLabel(el).width;
+  var newMeasurement = measureContent(el);
+  var newWidth = newMeasurement.width;
+  if (showing) {
+    newWidth = Math.max(childrenSize.width, newWidth);
+  }
 
   // The pexpr can't be smaller than the input text.
   newWidth = Math.max(newWidth, measureInput(el._input).width);
-
   var widthDeps = getWidthDependentElements(el);
 
   d3.select(el)
@@ -155,7 +185,7 @@ function toggleTraceElement(el) {
         this.style.width = '';
       });
 
-  var height = showing ? childrenSize.height : 0;
+  var height = newMeasurement.height + (showing ? children.height : 0);
   d3.select(el.lastChild).style('height', currentHeightPx)
       .transition()
       .duration(500)
@@ -171,11 +201,6 @@ function toggleTraceElement(el) {
 
 // A blackhole node is hidden and makes all its descendents hidden too.
 function isBlackhole(traceNode) {
-  if (traceNode.expr.constructor.name === 'Many' && !options.showFailures) {
-    // Not sure if this is exactly right. Maybe better would be to hide the
-    // node if it doesn't have any visible children.
-    return !traceNode.interval || traceNode.interval.contents.length === 0;
-  }
 
   if (traceNode.replacedBy) {
     return true;
@@ -184,7 +209,8 @@ function isBlackhole(traceNode) {
   var desc = traceNode.displayString;
   if (desc) {
     return desc[desc.length - 1] === '_' ||
-           desc === 'space' ||
+           desc === 'spaces' ||
+           desc === 'end' ||
            desc === 'empty';
   }
   return false;
@@ -225,21 +251,115 @@ function isPrimitive(expr) {
   }
 }
 
-function createTraceElement(grammar, traceNode, parent, input) {
+function getArgs(traceNode) {
+  var ruleBody = grammar.ruleBodies[traceNode.expr.ruleName];
+  var result = '(';
+  switch (ruleBody.constructor.name) {
+    case 'Alt': /* Get the succeed rule of alternation */
+      var altChildren = traceNode.children;
+
+      // Get the real children of alternative rule
+      if (altChildren.length !== 1 && altChildren[0].displayString === 'spaces') {
+        altChildren = altChildren.filter(function(child) {
+          return !isBlackhole(child);
+        })[0].children;
+      }
+
+      altChildren.forEach(function(child) {
+        if (!child.succeeded) {
+          return;
+        }
+        result += child.expr.toArgString();
+      });
+      break;
+    default:
+      result += ruleBody.toArgString();
+  }
+  return result + ')';
+}
+
+function saveSemanticAction(traceNode, funcStr, actionType, actionName, semanticContainer) {
+  var func;
+  try {
+    // TODO: translate the simpler editing language to javascript function
+    if (funcStr.trim().length !== 0) {
+      var argStr = getArgs(traceNode);
+
+      // console.log('function', 'function' + argStr + '{' + funcStr + '}');
+      func = eval('(function' + argStr + '{' + funcStr + '})'); // eslint-disable-line no-eval
+    }
+    semantics['get' + actionType](actionName).actionDict[traceNode.expr.ruleName] = func;
+
+    // Trigger to refresh the parsing result
+    restoreEditorState(inputEditor, 'input', $('#sampleInput'));
+  } catch (e) {
+    semanticContainer.children[1].className = 'semanticResult error';
+    semanticContainer.children[1].textContent = e.message;
+  }
+}
+
+function appendSemanticEditor(wrapper, traceNode) {
+  var ruleName = traceNode.expr.ruleName;
+  var semanticContainer = wrapper.appendChild(createElement('.semanticContainer'));
+  var editorWrap = semanticContainer.appendChild(createElement('.editor'));
+  var semanticEditor = CodeMirror(editorWrap);
+
+  semanticEditor.setOption('extraKeys', {
+    'Cmd-S': function(cm) {
+      // TODO: need to be modified, action type and action name
+      saveSemanticAction(traceNode, cm.getValue(), 'Operation', 'eval', semanticContainer);
+    }
+  });
+
+  // Get the function body of the selected action
+  // TODO: ['get'+actionType](actionName)
+  var actionFn = semantics.getOperation('eval').actionDict[ruleName];
+  if (actionFn) {
+    var actionFnStr = actionFn.toString();
+    var actionFnBody = actionFnStr.substring(actionFnStr.indexOf('{') + 1, actionFnStr.length - 1);
+    semanticEditor.setValue(actionFnBody);
+  }
+  editorWrap.hidden = true;
+
+  // Add semantic action result
+  var inputSeg = traceNode.interval.contents;
+  var matchResult = inputMatchResult;
+  inputMatchResult = grammar.match(inputSeg, ruleName);
+  if (inputMatchResult.failed()) { // Left recursion is involved
+    inputMatchResult = matchResult;
+  }
+
+  try {
+    // TODO: 'eval' -> action name
+    var res = semantics(inputMatchResult)['eval'](); // eslint-disable-line dot-notation
+    semanticContainer.appendChild(createElement('.semanticResult', res));
+  } catch (e) {
+    var errorElt = semanticContainer.appendChild(createElement('.semanticResult.error'));
+
+    // Showing error message only when it's not caused by missing semantic action
+    // Not sure if this is a good way, as the missing action might not be the rule
+    if (e.message.indexOf('Missing semantic action for ' + ruleName + ' ') === -1) {
+      errorElt.textContent = e;
+    }
+  }
+
+}
+
+function toggleSemanticEditor(el) {
+  // if there is no semantic editor associated with the `el`
+  if (el.children.length === 2) {
+    return;
+  }
+
+  var editor = el.children[1].children[0];
+  editor.hidden = !editor.hidden;
+}
+
+function createTraceElement(traceNode, parent, input) {
   var wrapper = parent.appendChild(createElement('.pexpr'));
   var pexpr = traceNode.expr;
   wrapper.classList.add(pexpr.constructor.name.toLowerCase());
   wrapper.classList.toggle('failed', !traceNode.succeeded);
-
-  wrapper.addEventListener('click', function(e) {
-    if (e.altKey && !(e.shiftKey || e.metaKey)) {
-      console.log(traceNode);  // eslint-disable-line no-console
-    } else if (pexpr.constructor.name !== 'Prim') {
-      toggleTraceElement(wrapper);
-    }
-    e.stopPropagation();
-    e.preventDefault();
-  });
 
   var inputMark, grammarMark, defMark;
   wrapper.addEventListener('mouseover', function(e) {
@@ -250,11 +370,13 @@ function createTraceElement(grammar, traceNode, parent, input) {
       inputMark = cmUtil.markInterval(inputEditor, traceNode.interval, 'highlight', false);
       inputEditor.getWrapperElement().classList.add('highlighting');
     }
+
     if (pexpr.interval) {
       grammarMark = cmUtil.markInterval(grammarEditor, pexpr.interval, 'active-appl', false);
       grammarEditor.getWrapperElement().classList.add('highlighting');
       cmUtil.scrollToInterval(grammarEditor, pexpr.interval);
     }
+
     var ruleName = pexpr.ruleName;
     if (ruleName) {
       var defInterval = grammar.ruleBodies[ruleName].definitionInterval;
@@ -265,6 +387,7 @@ function createTraceElement(grammar, traceNode, parent, input) {
     }
     e.stopPropagation();
   });
+
   wrapper.addEventListener('mouseout', function(e) {
     if (input) {
       input.classList.remove('highlight');
@@ -289,10 +412,38 @@ function createTraceElement(grammar, traceNode, parent, input) {
     prim: isPrimitive(traceNode.expr),
     spaces: pexpr.ruleName === 'spaces'
   });
+
+  label.addEventListener('click', function(e) {
+    if (e.altKey && !(e.shiftKey || e.metaKey)) {
+      console.log(traceNode);  // eslint-disable-line no-console
+    } else if (e.metaKey && !e.shiftKey && options.eval/* TODO: modify option check */) {
+      toggleSemanticEditor(wrapper); // cmd + click to open or close semantic editor
+    } else if (pexpr.constructor.name !== 'Prim') {
+      toggleTraceElement(wrapper);
+    }
+    e.stopPropagation();
+    e.preventDefault();
+  });
+
+  // Append semantic editor to the node
+  if (options.eval &&
+    traceNode.succeeded &&
+    pexpr.ruleName && pexpr.ruleName !== 'spaces') {
+
+    // TODO: remove
+    if (!semantics.getOperation('eval')) {
+      semantics.addOperation('eval', {
+        number: function(_) { return parseFloat(this.interval.contents); }
+      });
+    }
+
+    appendSemanticEditor(wrapper, traceNode);
+  }
+
   return wrapper;
 }
 
-function refreshParseTree(grammar, input) {  // eslint-disable-line no-unused-vars
+function refreshParseTree(input) {  // eslint-disable-line no-unused-vars
   var trace = grammar.trace(input);
   if (trace.result.failed()) {
     // Intervals with start == end won't show up in CodeMirror.
@@ -335,16 +486,20 @@ function refreshParseTree(grammar, input) {  // eslint-disable-line no-unused-va
           childInput.classList.add('whitespace');
         }
       }
+
       var container = containerStack[containerStack.length - 1];
-      var el = createTraceElement(grammar, node, container, childInput);
+      var el = createTraceElement(node, container, childInput);
+
       toggleClasses(el, {
         failed: !node.succeeded,
         hidden: !shouldNodeBeVisible(node),
         whitespace: isWhitespace
       });
+
       if (isLeaf) {
         return node.SKIP;
       }
+
       inputStack.push(childInput);
       containerStack.push(el.appendChild(createElement('.children')));
     },

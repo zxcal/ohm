@@ -49,11 +49,12 @@
       overflow: hidden;
       white-space: nowrap;
     }
-    .pexpr.seq.failed {
-      flex-grow: 0;
-    }
     .pexpr + .pexpr {
       margin-left: 2px;
+    }
+    .pexpr.failed {
+      flex-grow: 0;
+      margin-left: 0;
     }
     .pexpr.alt > .children > .pexpr {
       margin-left: 0;
@@ -135,6 +136,25 @@
       color: white;
     }
 
+    #semanticSelecter {
+      position: fixed;
+      bottom: 20px;
+      right: 10px;
+      display: block;
+    }
+    #newAction {
+      display: none;
+      flex-grow: 1;      
+      background-color: white;
+      border-radius: 3px;
+      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
+      margin-top: 7px;
+    }
+    #newAction > * {
+      margin: 3px;
+      float: left;
+    }
+
     #options {
       background-color: white;
       border-radius: 3px;
@@ -151,6 +171,7 @@
       position: relative;
       top: -1px;
     }
+    
     .input {
       font-family: Menlo, Monaco, sans-serif;
     }
@@ -192,7 +213,7 @@
     }
 
     #grammarContainer,
-    #inputContainer {
+    #inputContainer{
       display: flex;
       flex-direction: column;
       flex: 1;
@@ -203,6 +224,28 @@
       color: #e0a;
       font-size: 1em;
       margin: 12px 12px 6px;
+    }
+
+    .semanticContainer .CodeMirror {
+      background-color: hsla(217, 60%, 71%, 0.27);
+      height: 100px;
+      min-width: 300px;
+      font-family: Menlo, Monaco, sans-serif;
+      font-size: 12px;
+    }
+    .semanticContainer .semanticResult {
+      background-color: rgba(160, 254, 160, 0.63);
+      font-family: Menlo, Monaco, sans-serif;
+      font-size: 12px;
+      text-align: center;
+      color: black;
+      overflow: scroll;
+      height: 13px;
+    }
+
+    .semanticContainer .semanticResult.error {
+      background-color: rgba(255, 215, 222, 0.63);
+      color: red;
     }
     /*
       Hack to fix a problem with `height: 100%` in flex items.
@@ -287,7 +330,7 @@
                   0 0 0 1px hsla(216,89%,62%,.5);
       border-color: hsl(217,60%,71%);
       outline: none;
-    }
+    }    
 
     .splitter {
       background-color: #ddd;
@@ -349,11 +392,26 @@
     <div class="overlay"></div>
   </div>
   <div id="dragOverlay"></div>
-  <!--
+
   <div id="options">
-    <label><input type="checkbox" name="showFailures"> Show failures</label>
+    <!-- <label><input type="checkbox" name="showFailures"> Show failures</label> -->
+    <label><input type="checkbox" name="eval">Eval</label>
   </div>
-  -->
+
+<!--   <div id="semanticSelecter">
+    <select id="actions">
+      <option value="default">[select action]</option>
+    </select>
+    <button id="add">+</button>
+    <div id="newAction">
+      <textarea id="actionName" style="resize:none;"></textarea>
+      <select id="tag">
+        <option value="Operation">operation</option>
+        <option value="Attribute">attribute</option>
+      </select>
+    </div>
+  </div>
+ -->
   <div id="measuringDiv">
     <div class="pexpr"></div>
   </div>

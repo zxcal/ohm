@@ -479,6 +479,14 @@ Semantics.createSemantics = function(grammar, optSuperSemantics) {
     return proxy;
   };
 
+  proxy.getOperation = function(name) {
+    return s.operations[name];
+  };
+
+  proxy.getAttribute = function(name) {
+    return s.attributes[name];
+  };
+
   // Make the proxy's toString() work.
   proxy.toString = s.toString.bind(s);
 

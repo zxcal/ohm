@@ -11,6 +11,7 @@ var grammarEditor = CodeMirror($('#grammarContainer .editorWrapper'));
 
 // Expose the grammar globally so that it can easily be accessed from the console.
 var grammar = null;
+var semantics = null; // eslint-disable-line no-unused-vars
 
 // Misc Helpers
 // ------------
@@ -167,6 +168,7 @@ function parseGrammar(source) {
         setError('grammar', grammarEditor, err.interval, err.shortMessage || err.message);
         return;
       }
+      semantics = grammar.semantics();
       updateExternalRules(grammarEditor, result, grammar);
     }
 
@@ -175,7 +177,7 @@ function parseGrammar(source) {
       $('#expandedInput').innerHTML = '';
       $('#parseResults').innerHTML = '';
 
-      refreshParseTree(grammar, inputEditor.getValue());
+      refreshParseTree(inputEditor.getValue());
     }
   }
 
