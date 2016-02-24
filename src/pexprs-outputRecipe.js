@@ -8,6 +8,19 @@ var common = require('./common');
 var pexprs = require('./pexprs');
 
 // --------------------------------------------------------------------
+// Private stuff
+// --------------------------------------------------------------------
+
+function escapeString(str) {
+  var output = JSON.stringify(str);
+  output = output.replace(/[\u2028\u2029]/g, function(char, pos, str) {
+    var hex = char.codePointAt(0).toString(16);
+    return '\\u' + '0000'.slice(hex.length) + hex;
+  });
+  return output;
+}
+
+// --------------------------------------------------------------------
 // Operations
 // --------------------------------------------------------------------
 
@@ -23,7 +36,7 @@ pexprs.end.outputRecipe = function(sb, formals) {
 
 pexprs.Prim.prototype.outputRecipe = function(sb, formals) {
   sb.append('this.prim(');
-  sb.append(typeof this.obj === 'string' ? JSON.stringify(this.obj) : '' + this.obj);
+  sb.append(typeof this.obj === 'string' ? escapeString(this.obj) : '' + this.obj);
   sb.append(')');
 };
 
@@ -142,13 +155,13 @@ pexprs.Apply.prototype.outputRecipe = function(sb, formals) {
     var apps = formals.
         map(function(formal) { return 'this.app(' + JSON.stringify(formal) + ')'; });
     sb.append(', [' + apps.join(', ') + ']');
-  } else if (this.params.length > 0) {
+  } else if (this.args.length > 0) {
     sb.append(', [');
-    this.params.forEach(function(param, idx) {
+    this.args.forEach(function(arg, idx) {
       if (idx > 0) {
         sb.append(', ');
       }
-      param.outputRecipe(sb, formals);
+      arg.outputRecipe(sb, formals);
     });
     sb.append(']');
   }
