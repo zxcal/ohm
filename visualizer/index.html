@@ -227,32 +227,38 @@
     }
 
     .editorHeader {
-      height: 20px;
       font-family: Menlo, Monaco, sans-serif;
       font-size: 12px;
-      display: inline-block;
+      display: flex;
     }
-    .editorHeader .arg {
-      display: inline-block;
+    .editorHeader .block {
       float: left;
+      margin-left: 5px;
     }
     span.name {
-      font-weight: bold;
-      margin-left: 5px;
+      color: rgb(123, 123, 123);
       float: left;
     }
     textarea.represent {
       height: 14px;
-      width: 90px;
       resize: none;
       font-family: Menlo, Monaco, sans-serif;
       font-size: 12px;
       font-style: italic;
+      float: left;
+      clear: left;
+      border: 1px solid #ddd;
+      outline: none;
     }
-    .semanticContainer .editorBody .CodeMirror {
-      background-color: hsla(217, 60%, 71%, 0.27);
+    .semanticContainer .editorBody {
+      margin-top: 3px;
+      margin-bottom: 3px;
+      border: 1px solid #ddd;
       height: 100px;
       min-width: 300px;
+      overflow: auto
+    }
+    .semanticContainer .editorBody .CodeMirror {
       font-family: Menlo, Monaco, sans-serif;
       font-size: 12px;
     }
@@ -262,10 +268,8 @@
       font-size: 12px;
       text-align: center;
       color: black;
-      overflow: scroll;
       height: 13px;
     }
-
     .semanticContainer .semanticResult.error {
       background-color: rgba(255, 215, 222, 0.63);
       color: red;

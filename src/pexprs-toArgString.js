@@ -70,10 +70,13 @@ pexprs.Seq.prototype.toArgString = function() {
 };
 
 pexprs.Iter.prototype.toArgString = function() {
+  var str = this.expr.toArgString();
+  str = str.length === 0 ? 'Iter' : str;
   switch (this.operator) {
     case '*':
-    case '+': return this.expr.toArgString() + 's'; // return `argument`s
-    case '?': return 'opt' + this.expr.toArgString(); // return opt`argument`
+    case '+':
+      return str + 's'; // return `argument`s
+    case '?': return 'opt' + str; // return opt`argument`
   }
 };
 

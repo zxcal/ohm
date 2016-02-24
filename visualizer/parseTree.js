@@ -314,7 +314,7 @@ function getArgString(expr) {
 
 function getSemanticArgs(header) {
   var ans = [];
-  for (var i = 0; i < header.children.length; i++) {
+  for (var i = 1; i < header.children.length; i++) {
     ans.push(header.children[i].children[1].value);
   }
   return ans;
@@ -341,16 +341,20 @@ function saveSemanticAction(traceNode, funcStr, actionType, actionName, semantic
 }
 
 function loadHeader(traceNode, header, optArgStr) {
+  var rule = header.appendChild(createElement('.block'));
+  rule.appendChild(createElement('span.name', traceNode.displayString + ' ='));
+
   var expr = getArgExpr(traceNode);
   var displayStrs = getArgDisplay(expr);
   var argStrs = optArgStr || getArgString(expr);
   displayStrs.forEach(function(display, idx) {
-    var arg = header.appendChild(createElement('.arg'));
-    if (idx === 0) {
-      display = traceNode.displayString + ' = ' + display;
-    }
-    arg.appendChild(createElement('span.name', display + ':'));
-    arg.appendChild(createElement('textarea.represent', argStrs[idx]));
+    var arg = header.appendChild(createElement('.block'));
+    arg.appendChild(createElement('span.name', display));
+    var nameEditor = arg.appendChild(createElement('textarea.represent', argStrs[idx]));
+    nameEditor.cols = Math.max(nameEditor.value.length, display.length);
+    nameEditor.addEventListener('keyup', function() {
+      nameEditor.cols = Math.max(nameEditor.value.length, display.length);
+    });
   });
 }
 
@@ -418,6 +422,17 @@ function createTraceElement(traceNode, parent, input) {
   wrapper.classList.toggle('failed', !traceNode.succeeded);
 
   var inputMark, grammarMark, defMark;
+  function clearMark() {
+    if (input) {
+      input.classList.remove('highlight');
+    }
+    inputMark = cmUtil.clearMark(inputMark);
+    grammarMark = cmUtil.clearMark(grammarMark);
+    defMark = cmUtil.clearMark(defMark);
+    grammarEditor.getWrapperElement().classList.remove('highlighting');
+    inputEditor.getWrapperElement().classList.remove('highlighting');
+  }
+
   wrapper.addEventListener('mouseover', function(e) {
     if (input) {
       input.classList.add('highlight');
@@ -445,14 +460,7 @@ function createTraceElement(traceNode, parent, input) {
   });
 
   wrapper.addEventListener('mouseout', function(e) {
-    if (input) {
-      input.classList.remove('highlight');
-    }
-    inputMark = cmUtil.clearMark(inputMark);
-    grammarMark = cmUtil.clearMark(grammarMark);
-    defMark = cmUtil.clearMark(defMark);
-    grammarEditor.getWrapperElement().classList.remove('highlighting');
-    inputEditor.getWrapperElement().classList.remove('highlighting');
+    clearMark();
   });
   wrapper._input = input;
 
@@ -474,8 +482,12 @@ function createTraceElement(traceNode, parent, input) {
       console.log(traceNode);  // eslint-disable-line no-console
     } else if (e.metaKey && !e.shiftKey && options.eval/* TODO: modify option check */) {
       toggleSemanticEditor(wrapper); // cmd + click to open or close semantic editor
+      clearMark();
     } else if (pexpr.constructor.name !== 'Prim') {
       toggleTraceElement(wrapper);
+    }
+    if (input) {
+      input.classList.remove('highlight');
     }
     e.stopPropagation();
     e.preventDefault();
