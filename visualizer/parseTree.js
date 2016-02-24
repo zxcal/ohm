@@ -358,7 +358,7 @@ function loadHeader(traceNode, header, optArgStr) {
   });
 }
 
-function appendSemanticEditor(wrapper, traceNode) {
+function appendSemanticEditor(wrapper, traceNode, clearMarks) {
   var ruleName = traceNode.expr.ruleName;
   var semanticContainer = wrapper.appendChild(createElement('.semanticContainer'));
   var editorWrap = semanticContainer.appendChild(createElement('.editor'));
@@ -371,6 +371,7 @@ function appendSemanticEditor(wrapper, traceNode) {
   var semanticEditor = CodeMirror(body);
   semanticEditor.setOption('extraKeys', {
     'Cmd-S': function(cm) {
+      clearMarks();
       // TODO: need to be modified, action type and action name
       saveSemanticAction(traceNode, cm.getValue(), 'Operation', 'eval', semanticContainer);
     }
@@ -422,7 +423,7 @@ function createTraceElement(traceNode, parent, input) {
   wrapper.classList.toggle('failed', !traceNode.succeeded);
 
   var inputMark, grammarMark, defMark;
-  function clearMark() {
+  function clearMarks() {
     if (input) {
       input.classList.remove('highlight');
     }
@@ -460,7 +461,7 @@ function createTraceElement(traceNode, parent, input) {
   });
 
   wrapper.addEventListener('mouseout', function(e) {
-    clearMark();
+    clearMarks();
   });
   wrapper._input = input;
 
@@ -482,7 +483,7 @@ function createTraceElement(traceNode, parent, input) {
       console.log(traceNode);  // eslint-disable-line no-console
     } else if (e.metaKey && !e.shiftKey && options.eval/* TODO: modify option check */) {
       toggleSemanticEditor(wrapper); // cmd + click to open or close semantic editor
-      clearMark();
+      clearMarks();
     } else if (pexpr.constructor.name !== 'Prim') {
       toggleTraceElement(wrapper);
     }
@@ -505,7 +506,7 @@ function createTraceElement(traceNode, parent, input) {
       });
     }
 
-    appendSemanticEditor(wrapper, traceNode);
+    appendSemanticEditor(wrapper, traceNode, clearMarks);
   }
 
   return wrapper;
