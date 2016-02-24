@@ -226,7 +226,30 @@
       margin: 12px 12px 6px;
     }
 
-    .semanticContainer .CodeMirror {
+    .editorHeader {
+      height: 20px;
+      font-family: Menlo, Monaco, sans-serif;
+      font-size: 12px;
+      display: inline-block;
+    }
+    .editorHeader .arg {
+      display: inline-block;
+      float: left;
+    }
+    span.name {
+      font-weight: bold;
+      margin-left: 5px;
+      float: left;
+    }
+    textarea.represent {
+      height: 14px;
+      width: 90px;
+      resize: none;
+      font-family: Menlo, Monaco, sans-serif;
+      font-size: 12px;
+      font-style: italic;
+    }
+    .semanticContainer .editorBody .CodeMirror {
       background-color: hsla(217, 60%, 71%, 0.27);
       height: 100px;
       min-width: 300px;

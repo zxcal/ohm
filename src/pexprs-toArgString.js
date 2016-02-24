@@ -41,7 +41,7 @@ pexprs.Param.prototype.toArgString = function() {
 
 pexprs.Seq.prototype.toArgString = function() {
   if (this.factors.length === 1) {
-    return this.factors[0].toArgString().length() === 0 ?
+    return this.factors[0].toArgString().length === 0 ?
       '$0' :
       this.factors[0].toArgString();
   }

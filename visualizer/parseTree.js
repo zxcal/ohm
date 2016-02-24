@@ -251,31 +251,53 @@ function isPrimitive(expr) {
   }
 }
 
-function getArgs(traceNode) {
-  var ruleBody = grammar.ruleBodies[traceNode.expr.ruleName];
-  var result = '(';
-  switch (ruleBody.constructor.name) {
-    case 'Alt': /* Get the succeed rule of alternation */
-      var altChildren = traceNode.children;
+function getArgExpr(traceNode) {
+  var expr = grammar.ruleBodies[traceNode.expr.ruleName];
+  if (expr.constructor.name === 'Alt') {
+    var altChildren = traceNode.children;
 
-      // Get the real children of alternative rule
-      if (altChildren.length !== 1 && altChildren[0].displayString === 'spaces') {
-        altChildren = altChildren.filter(function(child) {
-          return !isBlackhole(child);
-        })[0].children;
-      }
+    // Get the real children of alternative rule
+    if (altChildren.length !== 1 && altChildren[0].displayString === 'spaces') {
+      altChildren = altChildren.filter(function(child) {
+        return !isBlackhole(child);
+      })[0].children;
+    }
 
-      altChildren.forEach(function(child) {
-        if (!child.succeeded) {
-          return;
-        }
-        result += child.expr.toArgString();
-      });
-      break;
-    default:
-      result += ruleBody.toArgString();
+    expr = altChildren.filter(function(child) {
+      return child.succeeded;
+    })[0].expr;
   }
-  return result + ')';
+  return expr;
+}
+
+function getArgDisplay(expr) {
+  var ans = [];
+  if (expr.constructor.name === 'Seq') {
+    expr.factors.forEach(function(factor) {
+      ans.push(factor.toDisplayString());
+    });
+  } else {
+    ans.push(expr.toDisplayString());
+  }
+  return ans;
+}
+
+function getArgString(expr) {
+  var ans = [];
+  if (expr.constructor.name === 'Seq') {
+    ans = expr.toArgString().split(',');
+  } else {
+    ans.push(expr.toArgString());
+  }
+  return ans;
+}
+
+function getSemanticArgs(header) {
+  var ans = [];
+  for (var i = 0; i < header.children.length; i++) {
+    ans.push(header.children[i].children[1].value);
+  }
+  return ans;
 }
 
 function saveSemanticAction(traceNode, funcStr, actionType, actionName, semanticContainer) {
@@ -283,7 +305,7 @@ function saveSemanticAction(traceNode, funcStr, actionType, actionName, semantic
   try {
     // TODO: translate the simpler editing language to javascript function
     if (funcStr.trim().length !== 0) {
-      var argStr = getArgs(traceNode);
+      var argStr = '(' + getSemanticArgs(semanticContainer.children[0].children[0]) + ')';
 
       // console.log('function', 'function' + argStr + '{' + funcStr + '}');
       func = eval('(function' + argStr + '{' + funcStr + '})'); // eslint-disable-line no-eval
@@ -298,12 +320,28 @@ function saveSemanticAction(traceNode, funcStr, actionType, actionName, semantic
   }
 }
 
+function loadHeader(traceNode, header, optArgStr) {
+  var expr = getArgExpr(traceNode);
+  var displayStrs = getArgDisplay(expr);
+  var argStrs = optArgStr || getArgString(expr);
+  displayStrs.forEach(function(display, idx) {
+    var arg = header.appendChild(createElement('.arg'));
+    arg.appendChild(createElement('span.name', display + ':'));
+    arg.appendChild(createElement('textarea.represent', argStrs[idx]));
+  });
+}
+
 function appendSemanticEditor(wrapper, traceNode) {
   var ruleName = traceNode.expr.ruleName;
   var semanticContainer = wrapper.appendChild(createElement('.semanticContainer'));
   var editorWrap = semanticContainer.appendChild(createElement('.editor'));
-  var semanticEditor = CodeMirror(editorWrap);
 
+  // Editor header
+  var header = editorWrap.appendChild(createElement('.editorHeader'));
+
+  // Editor body
+  var body = editorWrap.appendChild(createElement('.editorBody'));
+  var semanticEditor = CodeMirror(body);
   semanticEditor.setOption('extraKeys', {
     'Cmd-S': function(cm) {
       // TODO: need to be modified, action type and action name
@@ -311,14 +349,21 @@ function appendSemanticEditor(wrapper, traceNode) {
     }
   });
 
-  // Get the function body of the selected action
   // TODO: ['get'+actionType](actionName)
   var actionFn = semantics.getOperation('eval').actionDict[ruleName];
+  var optArgStr;
   if (actionFn) {
     var actionFnStr = actionFn.toString();
+    optArgStr = [];
+    actionFnStr.substring(actionFnStr.indexOf('(') + 1, actionFnStr.indexOf(')'))
+      .split(',').forEach(function(arg) {
+        optArgStr.push(arg.trim());
+      });
+
     var actionFnBody = actionFnStr.substring(actionFnStr.indexOf('{') + 1, actionFnStr.length - 1);
     semanticEditor.setValue(actionFnBody);
   }
+  loadHeader(traceNode, header, optArgStr);
   editorWrap.hidden = true;
 
   // Add semantic action result
@@ -336,13 +381,11 @@ function appendSemanticEditor(wrapper, traceNode) {
   } catch (e) {
     var errorElt = semanticContainer.appendChild(createElement('.semanticResult.error'));
 
-    // Showing error message only when it's not caused by missing semantic action
-    // Not sure if this is a good way, as the missing action might not be the rule
-    if (e.message.indexOf('Missing semantic action for ' + ruleName + ' ') === -1) {
+    // Showing error message only when it actually has semantic action
+    if (actionFn) {
       errorElt.textContent = e;
     }
   }
-
 }
 
 function toggleSemanticEditor(el) {
