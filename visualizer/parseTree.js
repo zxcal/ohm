@@ -155,6 +155,39 @@ function updateInputWidths(els) {
   }
 }
 
+function updateDependentElements(el, newWidth) {
+  var widthDeps = getWidthDependentElements(el);
+  d3.select(el)
+      .transition()
+      .duration(500)
+      .styleTween('width', tweenWithCallback(newWidth + 'px', function(v) {
+        updateInputWidths(widthDeps);
+      }))
+      .each('end', function() {
+        // Remove the width and allow the flexboxes to adjust to the correct
+        // size. If there is a glitch when this happens, we haven't calculated
+        // `newWidth` correctly.
+        this.style.width = '';
+      });
+}
+
+function toggleSemanticEditor(el) {
+  // if there is no semantic editor associated with the `el`
+  if (el.children.length === 2) {
+    return;
+  }
+
+  var editor = el.children[1].children[0];
+  editor.hidden = !editor.hidden;
+
+  var childrenWidth = el.children.hidden ? 0 : measureChildren(el).width;
+  var newWidth = Math.max(measureContent(el).width, childrenWidth);
+
+  // The pexpr can't be smaller than the input text.
+  newWidth = Math.max(newWidth, measureInput(el._input).width);
+  updateDependentElements(el, newWidth);
+}
+
 // Hides or shows the children of `el`, which is a div.pexpr.
 function toggleTraceElement(el) {
   var children = el.lastChild;
@@ -170,20 +203,7 @@ function toggleTraceElement(el) {
 
   // The pexpr can't be smaller than the input text.
   newWidth = Math.max(newWidth, measureInput(el._input).width);
-  var widthDeps = getWidthDependentElements(el);
-
-  d3.select(el)
-      .transition()
-      .duration(500)
-      .styleTween('width', tweenWithCallback(newWidth + 'px', function(v) {
-        updateInputWidths(widthDeps);
-      }))
-      .each('end', function() {
-        // Remove the width and allow the flexboxes to adjust to the correct
-        // size. If there is a glitch when this happens, we haven't calculated
-        // `newWidth` correctly.
-        this.style.width = '';
-      });
+  updateDependentElements(el, newWidth);
 
   var height = newMeasurement.height + (showing ? children.height : 0);
   d3.select(el.lastChild).style('height', currentHeightPx)
@@ -326,6 +346,9 @@ function loadHeader(traceNode, header, optArgStr) {
   var argStrs = optArgStr || getArgString(expr);
   displayStrs.forEach(function(display, idx) {
     var arg = header.appendChild(createElement('.arg'));
+    if (idx === 0) {
+      display = traceNode.displayString + ' = ' + display;
+    }
     arg.appendChild(createElement('span.name', display + ':'));
     arg.appendChild(createElement('textarea.represent', argStrs[idx]));
   });
@@ -386,16 +409,6 @@ function appendSemanticEditor(wrapper, traceNode) {
       errorElt.textContent = e;
     }
   }
-}
-
-function toggleSemanticEditor(el) {
-  // if there is no semantic editor associated with the `el`
-  if (el.children.length === 2) {
-    return;
-  }
-
-  var editor = el.children[1].children[0];
-  editor.hidden = !editor.hidden;
 }
 
 function createTraceElement(traceNode, parent, input) {

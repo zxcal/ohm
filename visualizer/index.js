@@ -168,11 +168,11 @@ function parseGrammar(source) {
         setError('grammar', grammarEditor, err.interval, err.shortMessage || err.message);
         return;
       }
-      semantics = grammar.semantics();
       updateExternalRules(grammarEditor, result, grammar);
+      semantics = grammar.semantics();
     }
 
-    if (grammar) {
+    if (grammar && grammar.defaultStartRule) {
       hideBottomOverlay();
       $('#expandedInput').innerHTML = '';
       $('#parseResults').innerHTML = '';

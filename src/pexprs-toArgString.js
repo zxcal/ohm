@@ -58,10 +58,9 @@ pexprs.Seq.prototype.toArgString = function() {
         count[arg] = 1;
       } else {
         if (count[arg] === 1) {
-          ans[ans.indexOf(arg)] = arg + '_0';
+          ans[ans.indexOf(arg)] = arg + '_1';
         }
-        arg = arg + '_' + count[arg];
-        count[arg]++;
+        arg = arg + '_' + (++count[arg]);
       }
 
       ans.push(arg);
