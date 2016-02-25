@@ -179,10 +179,8 @@ function toggleSemanticEditor(el) {
   var editor = el.children[1].children[0];
   editor.hidden = !editor.hidden;
 
-  var newWidth = Math.max(measureContent(el).width, el.offsetWidth);
-
   // The pexpr can't be smaller than the input text.
-  newWidth = Math.max(newWidth, measureInput(el._input).width);
+  var newWidth = Math.max(el.offsetWidth, measureInput(el._input).width);
   updateDependentElements(el, newWidth);
 }
 
