@@ -93,8 +93,7 @@ function measureChildren(wrapperEl) {
 
 function measureInput(inputEl) {
   var measuringDiv = $('#measuringDiv');
-  var span = measuringDiv.appendChild(createElement('span.input'));
-  span.innerHTML = inputEl.textContent;
+  var span = measuringDiv.appendChild(createElement('span.input', inputEl.textContent));
   var result = {
     width: span.offsetWidth,
     height: span.offsetHeight
@@ -180,8 +179,7 @@ function toggleSemanticEditor(el) {
   var editor = el.children[1].children[0];
   editor.hidden = !editor.hidden;
 
-  var childrenWidth = el.children.hidden ? 0 : measureChildren(el).width;
-  var newWidth = Math.max(measureContent(el).width, childrenWidth);
+  var newWidth = Math.max(measureContent(el).width, el.offsetWidth);
 
   // The pexpr can't be smaller than the input text.
   newWidth = Math.max(newWidth, measureInput(el._input).width);
@@ -472,7 +470,7 @@ function createTraceElement(traceNode, parent, input) {
   }
 
   var label = wrapper.appendChild(createElement('.label', text));
-  label.setAttribute('title', traceNode.displayString);
+  label.setAttribute('title', text);
   toggleClasses(label, {
     prim: isPrimitive(traceNode.expr),
     spaces: pexpr.ruleName === 'spaces'
