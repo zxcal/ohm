@@ -13,6 +13,13 @@ var UnicodeChars = {
 };
 
 var inputMatchResult;
+var nextStepMarked, hideResult;
+var zoom = false;
+document.addEventListener('keypress', function(e) {
+  if (e.keyCode === 122) {
+    zoom = true;
+  }
+});
 
 // D3 Helpers
 // ----------
@@ -176,8 +183,16 @@ function toggleSemanticEditor(el) {
     return;
   }
 
-  var editor = el.children[1].children[0];
-  editor.hidden = !editor.hidden;
+  var editor = el.children[1];
+  if (editor.classList.contains('hidden')) {
+    editor.classList.remove('hidden');
+    editor.children[1].hidden = false;
+  } else {
+    editor.classList.add('hidden');
+    if (editor.children[1].classList.contains('error')) {
+      editor.children[1].hidden = true;
+    }
+  }
 
   // The pexpr can't be smaller than the input text.
   var newWidth = Math.max(el.offsetWidth, measureInput(el._input).width);
@@ -308,11 +323,16 @@ function getArgString(expr) {
   return ans;
 }
 
-function getSemanticArgs(header) {
+function getSemanticArgs(header, optArgs) {
   var ans = [];
   for (var i = 1; i < header.children.length; i++) {
-    ans.push(header.children[i].children[1].value);
+    if (header.children[i].children[1].value) {
+      ans.push(header.children[i].children[1].value);
+    } else {
+      ans.push(optArgs[i - 1]);
+    }
   }
+  // console.log('args', ans);
   return ans;
 }
 
@@ -321,10 +341,21 @@ function saveSemanticAction(traceNode, funcStr, actionType, actionName, semantic
   try {
     // TODO: translate the simpler editing language to javascript function
     if (funcStr.trim().length !== 0) {
-      var argStr = '(' + getSemanticArgs(semanticContainer.children[0].children[0]) + ')';
-
-      // console.log('function', 'function' + argStr + '{' + funcStr + '}');
-      func = eval('(function' + argStr + '{' + funcStr + '})'); // eslint-disable-line no-eval
+      var argStr = '(' + getSemanticArgs(semanticContainer.children[0].children[0],
+        getArgString(getArgExpr(traceNode))) + ')';
+      funcStr = '{\n' +
+          'try {\n' +
+          funcStr + '\n' +
+          '} catch(e) {\n' +
+          '  if (!e.expressionStack) {\n' +
+          '    e.expressionStack = [];\n' +
+          '  }\n' +
+          '  e.expressionStack.push(this.ctorName);\n' +
+          '  throw e;\n' +
+          '}\n' +
+        '}';
+      // console.log('function' + argStr + funcStr);
+      func = eval('(function' + argStr + funcStr + ')'); // eslint-disable-line no-eval
     }
     semantics['get' + actionType](actionName).actionDict[traceNode.expr.ruleName] = func;
 
@@ -342,14 +373,27 @@ function loadHeader(traceNode, header, optArgStr) {
 
   var expr = getArgExpr(traceNode);
   var displayStrs = getArgDisplay(expr);
-  var argStrs = optArgStr || getArgString(expr);
+  var defaultArgStrs = getArgString(expr);
   displayStrs.forEach(function(display, idx) {
     var arg = header.appendChild(createElement('.block'));
-    arg.appendChild(createElement('span.name', display));
-    var nameEditor = arg.appendChild(createElement('textarea.represent', argStrs[idx]));
-    nameEditor.cols = Math.max(nameEditor.value.length, display.length);
+    var nameTag = arg.appendChild(createElement('span.name', display));
+    var nameEditor = arg.appendChild(createElement('textarea.represent'));
+    if (!optArgStr || optArgStr[idx] === defaultArgStrs[idx]) {
+      nameEditor.hidden = true;
+    } else {
+      nameEditor.value = optArgStr[idx];
+    }
+
+    nameEditor.autofocus = true;
+    nameEditor.cols = Math.max(nameEditor.value.length, 1);
     nameEditor.addEventListener('keyup', function() {
-      nameEditor.cols = Math.max(nameEditor.value.length, display.length);
+      nameEditor.cols = Math.max(nameEditor.value.length, 1);
+    });
+    nameTag.addEventListener('click', function(e) {
+      nameEditor.hidden = !nameEditor.hidden;
+      if (!nameEditor.hidden && nameEditor.value.length === 0) {
+        nameEditor.focus();
+      }
     });
   });
 }
@@ -368,6 +412,7 @@ function appendSemanticEditor(wrapper, traceNode, clearMarks) {
   semanticEditor.setOption('extraKeys', {
     'Cmd-S': function(cm) {
       clearMarks();
+
       // TODO: need to be modified, action type and action name
       saveSemanticAction(traceNode, cm.getValue(), 'Operation', 'eval', semanticContainer);
     }
@@ -383,12 +428,20 @@ function appendSemanticEditor(wrapper, traceNode, clearMarks) {
       .split(',').forEach(function(arg) {
         optArgStr.push(arg.trim());
       });
+    actionFnStr = actionFnStr.trim();
 
-    var actionFnBody = actionFnStr.substring(actionFnStr.indexOf('{') + 1, actionFnStr.length - 1);
+    var startIdx = actionFnStr.indexOf('try {', actionFnStr.indexOf('{')) + 5;
+    var nextIdx = actionFnStr.indexOf('} catch(e) {', startIdx);
+    var endIdx;
+    while (nextIdx >= 0) {
+      endIdx = nextIdx;
+      nextIdx = actionFnStr.indexOf('} catch(e) {', nextIdx + 12);
+    }
+    var actionFnBody = actionFnStr.substring(startIdx, endIdx);
     semanticEditor.setValue(actionFnBody);
   }
   loadHeader(traceNode, header, optArgStr);
-  editorWrap.hidden = true;
+  // editorWrap.hidden = true;
 
   // Add semantic action result
   var inputSeg = traceNode.interval.contents;
@@ -397,19 +450,33 @@ function appendSemanticEditor(wrapper, traceNode, clearMarks) {
   if (inputMatchResult.failed()) { // Left recursion is involved
     inputMatchResult = matchResult;
   }
-
+  var resultContainer;
   try {
     // TODO: 'eval' -> action name
     var res = semantics(inputMatchResult)['eval'](); // eslint-disable-line dot-notation
-    semanticContainer.appendChild(createElement('.semanticResult', res));
+    resultContainer = semanticContainer.appendChild(createElement('.semanticResult', res));
   } catch (e) {
-    var errorElt = semanticContainer.appendChild(createElement('.semanticResult.error'));
+    resultContainer = semanticContainer.appendChild(createElement('.semanticResult.error'));
+    // console.log(ruleName, inputMatchResult._cst.ctorName, e.expressionStack);
+    // hideResult = true;
+    if (!nextStepMarked && (e.expressionStack.length === 1 ||
+      (e.expressionStack.length === 2 &&
+        e.expressionStack[0] === ruleName &&
+        e.expressionStack[1] === inputMatchResult._cst.ctorName))) {
+
+      wrapper.children[0].classList.add('mark');
+      nextStepMarked = true;
+    }
 
     // Showing error message only when it actually has semantic action
     if (actionFn) {
-      errorElt.textContent = e;
+      resultContainer.textContent = e.message;
     }
   }
+  if (resultContainer.classList.contains('error') || hideResult) {
+    resultContainer.hidden = true;
+  }
+  semanticContainer.classList.add('hidden');
 }
 
 function createTraceElement(traceNode, parent, input) {
@@ -473,13 +540,21 @@ function createTraceElement(traceNode, parent, input) {
     prim: isPrimitive(traceNode.expr),
     spaces: pexpr.ruleName === 'spaces'
   });
-
   label.addEventListener('click', function(e) {
     if (e.altKey && !(e.shiftKey || e.metaKey)) {
       console.log(traceNode);  // eslint-disable-line no-console
     } else if (e.metaKey && !e.shiftKey && options.eval/* TODO: modify option check */) {
       toggleSemanticEditor(wrapper); // cmd + click to open or close semantic editor
       clearMarks();
+    } else if (zoom) {
+      if (wrapper.classList.contains('zoom')) {
+        wrapper.classList.remove('zoom');
+        // zoomOut(wrapper, traceNode);
+      } else {
+        wrapper.classList.add('zoom');
+        // zoomIn(wrapper, traceNode);
+      }
+      zoom = false;
     } else if (pexpr.constructor.name !== 'Prim') {
       toggleTraceElement(wrapper);
     }
@@ -498,7 +573,32 @@ function createTraceElement(traceNode, parent, input) {
     // TODO: remove
     if (!semantics.getOperation('eval')) {
       semantics.addOperation('eval', {
-        number: function(_) { return parseFloat(this.interval.contents); }
+        number: function(_) {
+          try {
+            return parseFloat(this.interval.contents);
+          } catch (e) {
+            if (!e.expressionStack) {
+              e.expressionStack = [];
+            }
+            e.expressionStack.push(this.ctorName);
+            throw e;
+          }
+        },
+        _nonterminal: function(children) {
+          try {
+            if (children.length === 1) {
+              return children[0].eval();
+            } else {
+              throw new Error('Missing semantic action for ' + this.ctorName);
+            }
+          } catch (e) {
+            if (!e.expressionStack) {
+              e.expressionStack = [];
+            }
+            e.expressionStack.push(this.ctorName);
+            throw e;
+          }
+        }
       });
     }
 
@@ -520,6 +620,8 @@ function refreshParseTree(input) {  // eslint-disable-line no-unused-vars
   var inputStack = [$('#expandedInput')];
   var containerStack = [$('#parseResults')];
 
+  nextStepMarked = false;
+  hideResult = false;
   trace.walk({
     enter: function(node, parent, depth) {
       // Don't recurse into nodes that didn't succeed unless "Show failures" is enabled.

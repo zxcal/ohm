@@ -12,7 +12,6 @@ var grammarEditor = CodeMirror($('#grammarContainer .editorWrapper'));
 // Expose the grammar globally so that it can easily be accessed from the console.
 var grammar = null;
 var semantics = null; // eslint-disable-line no-unused-vars
-
 // Misc Helpers
 // ------------
 

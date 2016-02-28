@@ -49,6 +49,9 @@
       overflow: hidden;
       white-space: nowrap;
     }
+    .pexpr.zoom {
+      border: 1px solid black;
+    }
     .pexpr + .pexpr {
       margin-left: 2px;
     }
@@ -117,6 +120,10 @@
     }
     .pexpr.collapsed > .label {
       border-color: #bbb;
+    }
+    .pexpr > .label.mark {
+      border: 1px solid red;
+      background: rgba(255, 215, 222, 0.63);
     }
     .pexpr > .children {
       display: flex;
@@ -230,30 +237,30 @@
       font-family: Menlo, Monaco, sans-serif;
       font-size: 12px;
       display: flex;
+      height: 24px;
+      margin-bottom: 8px;
     }
     .editorHeader .block {
+      padding-top: 5px;
+      padding-bottom: 5px;
       float: left;
       margin-left: 5px;
     }
     span.name {
       color: rgb(123, 123, 123);
-      margin-left: 3px;
       float: left;
     }
     textarea.represent {
-      height: 14px;
+      margin-top: 8px;
       resize: none;
-      font-family: Menlo, Monaco, sans-serif;
-      font-size: 12px;
-      font-style: italic;
-      float: left;
-      clear: left;
-      border: 1px solid #ddd;
+      font: italic 2pt Menlo, Monaco, sans-serif;
+      color:  #FF8D00;
+      border: white;
       outline: none;
     }
     .semanticContainer .editorBody {
       margin-top: 3px;
-      margin-bottom: 3px;
+      margin-bottom: 1px;
       border: 1px solid #ddd;
       height: 100px;
       min-width: 300px;
@@ -263,16 +270,21 @@
       font-family: Menlo, Monaco, sans-serif;
       font-size: 12px;
     }
+    .semanticContainer.hidden .editor{
+      display: none;
+    }
     .semanticContainer .semanticResult {
-      background-color: rgba(160, 254, 160, 0.63);
+      background-color: #efefef;
       font-family: Menlo, Monaco, sans-serif;
       font-size: 12px;
       text-align: center;
-      color: black;
+      color: green;
       height: 13px;
+      margin-bottom: 5px;
+      margin-top: -1px;
     }
     .semanticContainer .semanticResult.error {
-      background-color: rgba(255, 215, 222, 0.63);
+      background-color: rgb(255, 215, 222);
       color: red;
     }
     /*
