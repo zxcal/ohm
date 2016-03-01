@@ -13,12 +13,12 @@ var UnicodeChars = {
 };
 
 var inputMatchResult;
-var nextStepMarked, hideResult;
+var nextStepMarked;
 var zoom = false;
 document.addEventListener('keypress', function(e) {
-  if (e.keyCode === 122) {
-    zoom = true;
-  }
+  // if (e.keyCode === 122) {
+  //   zoom = true;
+  // }
 });
 
 // D3 Helpers
@@ -189,7 +189,9 @@ function toggleSemanticEditor(el) {
     editor.children[1].hidden = false;
   } else {
     editor.classList.add('hidden');
-    if (editor.children[1].classList.contains('error')) {
+
+    // Hide result
+    if (editor.children[1].classList.contains('hidden')) {
       editor.children[1].hidden = true;
     }
   }
@@ -240,7 +242,7 @@ function isBlackhole(traceNode) {
   var desc = traceNode.displayString;
   if (desc) {
     return desc[desc.length - 1] === '_' ||
-           desc === 'spaces' ||
+           desc === 'space' ||
            desc === 'end' ||
            desc === 'empty';
   }
@@ -290,7 +292,7 @@ function getArgExpr(traceNode) {
     // Get the real children of alternative rule
     if (altChildren.length !== 1 && altChildren[0].displayString === 'spaces') {
       altChildren = altChildren.filter(function(child) {
-        return !isBlackhole(child);
+        return !isBlackhole(child) && child.displayString !== 'spaces';
       })[0].children;
     }
 
@@ -346,7 +348,7 @@ function saveSemanticAction(traceNode, funcStr, actionType, actionName, semantic
       funcStr = '{\n' +
           'try {\n' +
           funcStr + '\n' +
-          '} catch(e) {\n' +
+          '} catch (e) {\n' +
           '  if (!e.expressionStack) {\n' +
           '    e.expressionStack = [];\n' +
           '  }\n' +
@@ -354,7 +356,7 @@ function saveSemanticAction(traceNode, funcStr, actionType, actionName, semantic
           '  throw e;\n' +
           '}\n' +
         '}';
-      // console.log('function' + argStr + funcStr);
+      console.log('function' + argStr + funcStr);  // eslint-disable-line no-console
       func = eval('(function' + argStr + funcStr + ')'); // eslint-disable-line no-eval
     }
     semantics['get' + actionType](actionName).actionDict[traceNode.expr.ruleName] = func;
@@ -373,6 +375,7 @@ function loadHeader(traceNode, header, optArgStr) {
 
   var expr = getArgExpr(traceNode);
   var displayStrs = getArgDisplay(expr);
+  // console.log(expr, expr.ruleName, displayStrs);
   var defaultArgStrs = getArgString(expr);
   displayStrs.forEach(function(display, idx) {
     var arg = header.appendChild(createElement('.block'));
@@ -430,12 +433,12 @@ function appendSemanticEditor(wrapper, traceNode, clearMarks) {
       });
     actionFnStr = actionFnStr.trim();
 
-    var startIdx = actionFnStr.indexOf('try {', actionFnStr.indexOf('{')) + 5;
-    var nextIdx = actionFnStr.indexOf('} catch(e) {', startIdx);
+    var startIdx = actionFnStr.indexOf('try {\n', actionFnStr.indexOf('{')) + 6;
+    var nextIdx = actionFnStr.indexOf('} catch (e) {', startIdx);
     var endIdx;
     while (nextIdx >= 0) {
       endIdx = nextIdx;
-      nextIdx = actionFnStr.indexOf('} catch(e) {', nextIdx + 12);
+      nextIdx = actionFnStr.indexOf('} catch (e) {', nextIdx + 13);
     }
     var actionFnBody = actionFnStr.substring(startIdx, endIdx);
     semanticEditor.setValue(actionFnBody);
@@ -457,13 +460,12 @@ function appendSemanticEditor(wrapper, traceNode, clearMarks) {
     resultContainer = semanticContainer.appendChild(createElement('.semanticResult', res));
   } catch (e) {
     resultContainer = semanticContainer.appendChild(createElement('.semanticResult.error'));
+
     // console.log(ruleName, inputMatchResult._cst.ctorName, e.expressionStack);
-    // hideResult = true;
     if (!nextStepMarked && (e.expressionStack.length === 1 ||
       (e.expressionStack.length === 2 &&
         e.expressionStack[0] === ruleName &&
         e.expressionStack[1] === inputMatchResult._cst.ctorName))) {
-
       wrapper.children[0].classList.add('mark');
       nextStepMarked = true;
     }
@@ -473,7 +475,20 @@ function appendSemanticEditor(wrapper, traceNode, clearMarks) {
       resultContainer.textContent = e.message;
     }
   }
-  if (resultContainer.classList.contains('error') || hideResult) {
+
+  // The result comes from `_nonterminal`
+  if (!resultContainer.classList.contains('error') &&
+    !nextStepMarked && !actionFn) {
+    wrapper.children[0].classList.add('passThrough');
+  }
+
+  // Hide result if it's an error, or it gets from `_nonterminal`,
+  // evaluating process haven't get to it accroding to the top-down
+  // left-to-right order
+  if (resultContainer.classList.contains('error') ||
+    wrapper.children[0].classList.contains('passThrough') ||
+    nextStepMarked) {
+    resultContainer.classList.add('hidden');
     resultContainer.hidden = true;
   }
   semanticContainer.classList.add('hidden');
@@ -621,7 +636,6 @@ function refreshParseTree(input) {  // eslint-disable-line no-unused-vars
   var containerStack = [$('#parseResults')];
 
   nextStepMarked = false;
-  hideResult = false;
   trace.walk({
     enter: function(node, parent, depth) {
       // Don't recurse into nodes that didn't succeed unless "Show failures" is enabled.

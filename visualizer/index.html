@@ -86,7 +86,7 @@
       border-bottom: 1px solid #efefef;
       box-sizing: border-box;
       display: block;
-      margin: 1px 0;
+      margin-bottom: 1px;
       padding: 2px 2px 0 2px;
       position: relative;
       text-align: center;
@@ -124,6 +124,10 @@
     .pexpr > .label.mark {
       border: 1px solid red;
       background: rgba(255, 215, 222, 0.63);
+    }
+    .pexpr > .label.passThrough {
+      border-bottom: 1px solid #9E9E9E;
+      margin-bottom: 0px;
     }
     .pexpr > .children {
       display: flex;
@@ -274,11 +278,11 @@
       display: none;
     }
     .semanticContainer .semanticResult {
+      padding-bottom: 2px;
       background-color: #efefef;
-      font-family: Menlo, Monaco, sans-serif;
-      font-size: 12px;
+      font: 12px Monaco, sans-serif;
       text-align: center;
-      color: green;
+      color: #4CAF50;
       height: 13px;
       margin-bottom: 5px;
       margin-top: -1px;
@@ -338,6 +342,12 @@
     }
     .CodeMirror-lines pre {
       padding-left: 14px;
+    }
+    .semanticContainer .editorBody .CodeMirror-lines {
+      padding: 8px;
+    }
+    .semanticContainer .editorBody .CodeMirror-lines pre {
+      padding-left: 0px;
     }
 
     .footer {
