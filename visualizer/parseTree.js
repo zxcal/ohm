@@ -12,14 +12,19 @@ var UnicodeChars = {
   WHITE_BULLET: '\u25E6'
 };
 
-var inputMatchResult;
-var nextStepMarked;
+var resultMap, todo, passThrough;
 var zoom = false;
 document.addEventListener('keypress', function(e) {
   // if (e.keyCode === 122) {
   //   zoom = true;
   // }
 });
+
+function Fail() { }
+Fail.prototype.toString = function() {
+  return undefined;
+};
+var failure = new Fail();
 
 // D3 Helpers
 // ----------
@@ -346,15 +351,28 @@ function saveSemanticAction(traceNode, funcStr, actionType, actionName, semantic
       var argStr = '(' + getSemanticArgs(semanticContainer.children[0].children[0],
         getArgString(getArgExpr(traceNode))) + ')';
       funcStr = '{\n' +
-          'try {\n' +
-          funcStr + '\n' +
-          '} catch (e) {\n' +
-          '  if (!e.expressionStack) {\n' +
-          '    e.expressionStack = [];\n' +
+          '  try {\n' +
+          '    var key = this.ctorName + "_from_" + \n' +
+          '      this.interval.startIdx + "_to_" + \n' +
+          '      this.interval.endIdx;\n  ' +
+          '    var ans = (() => { ' + funcStr + ' })();\n' +
+          '  } catch (error) {\n' +
+          '    if (!todo) {\n' +
+          '      if (!error.expressionStack) {\n' +
+          '        error.expressionStack = key;\n' +
+          '      }\n' +
+          '      resultMap[key] = error;\n' +
+          '    }\n' +
+          '  } finally {\n' +
+          '    if (resultMap[key] instanceof Error) {\n' +
+          '      throw resultMap[key];\n' +
+          '     }\n' +
+          '    if (!ans && todo) {\n' +
+          '      ans = failure;\n' +
+          '    }\n' +
+          '    resultMap[key] = ans;\n' +
+          '    return ans;\n' +
           '  }\n' +
-          '  e.expressionStack.push(this.ctorName);\n' +
-          '  throw e;\n' +
-          '}\n' +
         '}';
       console.log('function' + argStr + funcStr);  // eslint-disable-line no-console
       func = eval('(function' + argStr + funcStr + ')'); // eslint-disable-line no-eval
@@ -363,9 +381,9 @@ function saveSemanticAction(traceNode, funcStr, actionType, actionName, semantic
 
     // Trigger to refresh the parsing result
     restoreEditorState(inputEditor, 'input', $('#sampleInput'));
-  } catch (e) {
+  } catch (error) {
     semanticContainer.children[1].className = 'semanticResult error';
-    semanticContainer.children[1].textContent = e.message;
+    semanticContainer.children[1].textContent = error.message;
   }
 }
 
@@ -415,7 +433,6 @@ function appendSemanticEditor(wrapper, traceNode, clearMarks) {
   semanticEditor.setOption('extraKeys', {
     'Cmd-S': function(cm) {
       clearMarks();
-
       // TODO: need to be modified, action type and action name
       saveSemanticAction(traceNode, cm.getValue(), 'Operation', 'eval', semanticContainer);
     }
@@ -423,6 +440,7 @@ function appendSemanticEditor(wrapper, traceNode, clearMarks) {
 
   // TODO: ['get'+actionType](actionName)
   var actionFn = semantics.getOperation('eval').actionDict[ruleName];
+
   var optArgStr;
   if (actionFn) {
     var actionFnStr = actionFn.toString();
@@ -433,52 +451,56 @@ function appendSemanticEditor(wrapper, traceNode, clearMarks) {
       });
     actionFnStr = actionFnStr.trim();
 
-    var startIdx = actionFnStr.indexOf('try {\n', actionFnStr.indexOf('{')) + 6;
-    var nextIdx = actionFnStr.indexOf('} catch (e) {', startIdx);
+    var startIdx = actionFnStr.indexOf('var ans = (() => {') + 18;
+    var nextIdx = actionFnStr.indexOf('})();', startIdx);
     var endIdx;
     while (nextIdx >= 0) {
       endIdx = nextIdx;
-      nextIdx = actionFnStr.indexOf('} catch (e) {', nextIdx + 13);
+      nextIdx = actionFnStr.indexOf('})();', nextIdx + 6);
     }
     var actionFnBody = actionFnStr.substring(startIdx, endIdx);
     semanticEditor.setValue(actionFnBody);
   }
   loadHeader(traceNode, header, optArgStr);
-  // editorWrap.hidden = true;
 
   // Add semantic action result
-  var inputSeg = traceNode.interval.contents;
-  var matchResult = inputMatchResult;
-  inputMatchResult = grammar.match(inputSeg, ruleName);
-  if (inputMatchResult.failed()) { // Left recursion is involved
-    inputMatchResult = matchResult;
+  if (!resultMap) {
+    resultMap = Object.create(null);
+    var inputSeg = traceNode.interval.contents;
+    var matchResult = grammar.match(inputSeg, ruleName);
+    try {
+      semantics(matchResult).eval();
+    } catch (error) {
+
+    }
   }
+
+  var key = ruleName + '_from_' +
+    traceNode.interval.trimmed().startIdx + '_to_' +
+    traceNode.interval.trimmed().endIdx;
+  var res = resultMap[key];
   var resultContainer;
-  try {
-    // TODO: 'eval' -> action name
-    var res = semantics(inputMatchResult)['eval'](); // eslint-disable-line dot-notation
-    resultContainer = semanticContainer.appendChild(createElement('.semanticResult', res));
-  } catch (e) {
+  if (res instanceof Error) {
     resultContainer = semanticContainer.appendChild(createElement('.semanticResult.error'));
-
-    // console.log(ruleName, inputMatchResult._cst.ctorName, e.expressionStack);
-    if (!nextStepMarked && (e.expressionStack.length === 1 ||
-      (e.expressionStack.length === 2 &&
-        e.expressionStack[0] === ruleName &&
-        e.expressionStack[1] === inputMatchResult._cst.ctorName))) {
+    var e = res;
+    if (e.expressionStack === key) {
       wrapper.children[0].classList.add('mark');
-      nextStepMarked = true;
     }
-
     // Showing error message only when it actually has semantic action
-    if (actionFn) {
-      resultContainer.textContent = e.message;
+    resultContainer.textContent = e.message;
+  // } else if (res === undefined && todo){
+  } else if (res === failure) {
+    resultContainer = semanticContainer.appendChild(createElement('.semanticResult.error'));
+    if (todo.includes(key)) {
+      wrapper.children[0].classList.add('mark');
     }
+  } else {
+    resultContainer = semanticContainer.appendChild(createElement('.semanticResult', res));
   }
+  // console.log(ruleName, res, todo);
 
   // The result comes from `_nonterminal`
-  if (!resultContainer.classList.contains('error') &&
-    !nextStepMarked && !actionFn) {
+  if (passThrough && passThrough.includes(key)) {
     wrapper.children[0].classList.add('passThrough');
   }
 
@@ -487,7 +509,7 @@ function appendSemanticEditor(wrapper, traceNode, clearMarks) {
   // left-to-right order
   if (resultContainer.classList.contains('error') ||
     wrapper.children[0].classList.contains('passThrough') ||
-    nextStepMarked) {
+    res === undefined) {
     resultContainer.classList.add('hidden');
     resultContainer.hidden = true;
   }
@@ -590,28 +612,67 @@ function createTraceElement(traceNode, parent, input) {
       semantics.addOperation('eval', {
         number: function(_) {
           try {
-            return parseFloat(this.interval.contents);
-          } catch (e) {
-            if (!e.expressionStack) {
-              e.expressionStack = [];
+            var key = this.ctorName + '_from_' +
+              this.interval.startIdx + '_to_' +
+              this.interval.endIdx;
+            var ans = (() => {
+              return parseFloat(this.interval.contents);
+            })();
+          } catch (error) {
+            if (!todo) {
+              if (!error.expressionStack) {
+                error.expressionStack = key;
+              }
+              resultMap[key] = error;
             }
-            e.expressionStack.push(this.ctorName);
-            throw e;
+          } finally {
+            if (resultMap[key] instanceof Error) {
+              throw resultMap[key];
+            }
+            if (!ans && todo) {
+              ans = failure;
+            }
+            resultMap[key] = ans;
+            return ans;
           }
         },
         _nonterminal: function(children) {
           try {
-            if (children.length === 1) {
-              return children[0].eval();
+            var key = this.ctorName + '_from_' +
+              this.interval.startIdx + '_to_' +
+              this.interval.endIdx;
+            var ans = (() => {
+              if (children.length === 1) {
+                if (!passThrough) {
+                  passThrough = [];
+                }
+                passThrough.push(key);
+                return children[0].eval();
+              } else {
+                if (!todo) {
+                  todo = [];
+                }
+                todo.push(key);
+              }
+            })();
+          } catch (error) {
+            if (!todo) {
+              if (!error.expressionStack) {
+                error.expressionStack = key;
+              }
+              resultMap[key] = error;
             } else {
-              throw new Error('Missing semantic action for ' + this.ctorName);
+              ans = failure;
             }
-          } catch (e) {
-            if (!e.expressionStack) {
-              e.expressionStack = [];
+          } finally {
+            if (resultMap[key] instanceof Error) {
+              throw resultMap[key];
             }
-            e.expressionStack.push(this.ctorName);
-            throw e;
+            if (!ans) {
+              ans = failure;
+            }
+            resultMap[key] = ans;
+            return ans;
           }
         }
       });
@@ -635,7 +696,9 @@ function refreshParseTree(input) {  // eslint-disable-line no-unused-vars
   var inputStack = [$('#expandedInput')];
   var containerStack = [$('#parseResults')];
 
-  nextStepMarked = false;
+  resultMap = undefined;
+  todo = undefined;
+  passThrough = undefined;
   trace.walk({
     enter: function(node, parent, depth) {
       // Don't recurse into nodes that didn't succeed unless "Show failures" is enabled.
