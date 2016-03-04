@@ -163,19 +163,20 @@ function parseGrammar(source) {
       var result = parseGrammar(grammarEditor.getValue());
       grammar = result.grammar;
       updateExternalRules(grammarEditor, result.matchResult, grammar);
-      semantics = grammar.semantics();
+
       if (result.error) {
         var err = result.error;
         setError('grammar', grammarEditor, err.interval, err.shortMessage || err.message);
         return;
       }
+      semantics =  grammar.semantics();
     }
 
     if (grammar && grammar.defaultStartRule) {
       hideBottomOverlay();
       $('#expandedInput').innerHTML = '';
       $('#parseResults').innerHTML = '';
-      refreshParseTree(inputEditor.getValue());
+      refreshParseTree(inputEditor.getValue(), triggerRefresh);
     }
   }
 

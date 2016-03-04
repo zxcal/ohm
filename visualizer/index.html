@@ -50,7 +50,10 @@
       white-space: nowrap;
     }
     .pexpr.zoom {
-      border: 1px solid black;
+      border: 2px solid blue;
+    }
+    .pexpr.zoom.noBorder {
+      border: 0px;
     }
     .pexpr + .pexpr {
       margin-left: 2px;
@@ -166,8 +169,36 @@
       float: left;
     }
 
+    #zoom {
+      margin-top: 8px;
+      margin-left: 50px;
+      position: fixed;
+      right: 20px;
+      cursor: pointer;
+    }
+    #zoom .zoomElm {
+      background-color: rgb(181, 213, 255);
+      padding: 3px;
+      margin-top: 2px;
+      margin-bottom: 2px;
+      font-size: 12px;
+      font-style: normal;
+      color: black;
+      text-align: center;
+      border-radius: 5px;
+    }
+    #zoom .zoomElm:hover {
+      background-color: hsla(216,89%,62%,.5);
+    }
+
+    #visualizerBody {
+      float: left;
+    }
     #options {
       background-color: white;
+      color: black;
+      font-family: Menlo, Monaco, sans-serif;
+      font-style: normal;
       border-radius: 3px;
       box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
       padding: 2px 6px 1px 6px;
@@ -437,18 +468,21 @@
   </div>
   <div id="mainSplitter" class="splitter"></div>
   <div id="bottomSection">
-    <div id="expandedInput"></div>
-    <div id="parseResults"></div>
-    <div class="overlay"></div>
+    <div id="visualizerBody">
+      <div id="expandedInput"></div>
+      <div id="parseResults"></div>
+      <div class="overlay"></div>
+    </div>
+    <div id="zoom" hidden></div>
   </div>
   <div id="dragOverlay"></div>
-
   <div id="options">
     <!-- <label><input type="checkbox" name="showFailures"> Show failures</label> -->
     <label><input type="checkbox" name="eval">Eval</label>
   </div>
 
-<!--   <div id="semanticSelecter">
+<!--   
+  <div id="semanticSelecter">
     <select id="actions">
       <option value="default">[select action]</option>
     </select>

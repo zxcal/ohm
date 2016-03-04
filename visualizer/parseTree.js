@@ -1,6 +1,6 @@
 /* eslint-env browser */
 /* global cmUtil, createElement, d3, getWidthDependentElements, grammarEditor, inputEditor */
-/* global options, setError, CodeMirror, restoreEditorState, grammar, semantics*/
+/* global options, setError, CodeMirror, grammar, semantics*/
 
 'use strict';
 
@@ -13,11 +13,18 @@ var UnicodeChars = {
 };
 
 var resultMap, todo, passThrough;
-var zoom = false;
-document.addEventListener('keypress', function(e) {
-  // if (e.keyCode === 122) {
-  //   zoom = true;
-  // }
+var zoom = false, zoomStack = [];
+var refresh;
+var zoomPic;
+document.addEventListener('keydown', function(e) {
+  if (e.keyCode === 90) {
+    zoom = true;
+  }
+});
+document.addEventListener('keyup', function(e) {
+  if (e.keyCode === 90) {
+    zoom = false;
+  }
 });
 
 function Fail() { }
@@ -358,8 +365,8 @@ function saveSemanticAction(traceNode, funcStr, actionType, actionName, semantic
           '    var ans = (() => { ' + funcStr + ' })();\n' +
           '  } catch (error) {\n' +
           '    if (!todo) {\n' +
-          '      if (!error.expressionStack) {\n' +
-          '        error.expressionStack = key;\n' +
+          '      if (!error.expression) {\n' +
+          '        error.expression = key;\n' +
           '      }\n' +
           '      resultMap[key] = error;\n' +
           '    }\n' +
@@ -380,7 +387,10 @@ function saveSemanticAction(traceNode, funcStr, actionType, actionName, semantic
     semantics['get' + actionType](actionName).actionDict[traceNode.expr.ruleName] = func;
 
     // Trigger to refresh the parsing result
-    restoreEditorState(inputEditor, 'input', $('#sampleInput'));
+    grammarEditor.getWrapperElement().classList.remove('highlighting');
+    inputEditor.getWrapperElement().classList.remove('highlighting');
+    refresh(100);
+    // restoreEditorState(inputEditor, 'input', $('#sampleInput'));
   } catch (error) {
     semanticContainer.children[1].className = 'semanticResult error';
     semanticContainer.children[1].textContent = error.message;
@@ -464,17 +474,6 @@ function appendSemanticEditor(wrapper, traceNode, clearMarks) {
   loadHeader(traceNode, header, optArgStr);
 
   // Add semantic action result
-  if (!resultMap) {
-    resultMap = Object.create(null);
-    var inputSeg = traceNode.interval.contents;
-    var matchResult = grammar.match(inputSeg, ruleName);
-    try {
-      semantics(matchResult).eval();
-    } catch (error) {
-
-    }
-  }
-
   var key = ruleName + '_from_' +
     traceNode.interval.trimmed().startIdx + '_to_' +
     traceNode.interval.trimmed().endIdx;
@@ -483,7 +482,7 @@ function appendSemanticEditor(wrapper, traceNode, clearMarks) {
   if (res instanceof Error) {
     resultContainer = semanticContainer.appendChild(createElement('.semanticResult.error'));
     var e = res;
-    if (e.expressionStack === key) {
+    if (e.expression === key) {
       wrapper.children[0].classList.add('mark');
     }
     // Showing error message only when it actually has semantic action
@@ -516,9 +515,156 @@ function appendSemanticEditor(wrapper, traceNode, clearMarks) {
   semanticContainer.classList.add('hidden');
 }
 
+function initSemantics() {
+  semantics.addOperation('eval', {
+    number: function(_) {
+      try {
+        var key = this.ctorName + '_from_' +
+          this.interval.startIdx + '_to_' +
+          this.interval.endIdx;
+        /* eslint-disable */
+        var ans = (() => {
+          return parseFloat(this.interval.contents);
+        })();
+        /* eslint-enable */
+      } catch (error) {
+        if (!todo) {
+          if (!error.expression) {
+            error.expression = key;
+          }
+          resultMap[key] = error;
+        }
+      } finally {
+        if (resultMap[key] instanceof Error) {
+          throw resultMap[key];
+        }
+        if (!ans && todo) {
+          ans = failure;
+        }
+        resultMap[key] = ans;
+        return ans;
+      }
+    },
+    _nonterminal: function(children) {
+      try {
+        var key = this.ctorName + '_from_' +
+          this.interval.startIdx + '_to_' +
+          this.interval.endIdx;
+        /* eslint-disable */
+        var ans = (() => {
+          if (children.length === 1) {
+            if (!passThrough) {
+              passThrough = [];
+            }
+            passThrough.push(key);
+            return children[0].eval();
+          } else {
+            if (!todo) {
+              todo = [];
+            }
+            todo.push(key);
+          }
+        })();
+        /* eslint-enable */
+      } catch (error) {
+        if (!todo) {
+          if (!error.expression) {
+            error.expression = key;
+          }
+          resultMap[key] = error;
+        }
+      } finally {
+        if (resultMap[key] instanceof Error) {
+          throw resultMap[key];
+        }
+        if (!ans) {
+          ans = failure;
+        }
+        resultMap[key] = ans;
+        return ans;
+      }
+    }
+  });
+}
+
+function zoomOut(wrapper, ruleName, inputSeg){
+  wrapper.classList.remove('zoom');
+  wrapper.classList.remove('noBorder');
+  var zoomElm = zoomStack[zoomStack.length - 1];
+  while (zoomElm &&
+    (zoomElm.startRule !== ruleName ||
+      zoomElm.input.trim() !== inputSeg.trim())) {
+    zoomStack.pop();
+    zoomElm = zoomStack[zoomStack.length - 1];
+  }
+  zoomStack.pop();
+  if (zoomStack.length > 0) {
+    $('#zoom').lastChild._elm = zoomStack[zoomStack.length - 1];
+  } else {
+    $('#zoom').innerHTML = '';
+  }
+}
+
+function zoomIn(wrapper, ruleName, inputSeg, clearMarks) {
+
+  if (zoomStack.length > 0 &&
+      zoomStack[zoomStack.length - 1].startRule === ruleName &&
+      zoomStack[zoomStack.length - 1].input.trim() === inputSeg.trim()) {
+    return;
+  }
+
+  wrapper.classList.add('zoom');
+
+  zoomStack.push({startRule: ruleName, input: inputSeg});
+
+  if ($('#zoom').children.length > 0) {
+    $('#zoom').removeChild($('#zoom').lastChild);
+  }
+
+  var zoomElm = $('#zoom').appendChild(createElement('.zoomElm', 'Zoom Out'));
+  zoomElm._elm = zoomStack[zoomStack.length - 1];
+
+  zoomPic = undefined;
+  zoomElm.addEventListener('click', function(e) {
+    zoomPic = undefined;
+    $('#zoom').removeChild(zoomElm);
+    zoomStack = [];
+    clearMarks();
+    refresh(100);
+  });
+
+  zoomElm.addEventListener('mouseover', function(e) {
+    zoomPic = {
+      elm: zoomElm._elm
+    };
+    clearMarks();
+    refresh(100);
+  });
+  zoomElm.addEventListener('mouseout', function(e) {
+    zoomPic = undefined;
+    clearMarks();
+    refresh(100);
+  });
+}
+
 function createTraceElement(traceNode, parent, input) {
-  var wrapper = parent.appendChild(createElement('.pexpr'));
   var pexpr = traceNode.expr;
+  var ruleName = pexpr.ruleName;
+  var inputSeg = traceNode.interval.contents;
+  if (options.eval && !resultMap) {
+    var matchResult = grammar.match(inputSeg, ruleName);
+    resultMap = Object.create(null);
+
+    if (!semantics.getOperation('eval')) {
+      initSemantics();
+    }
+    try {
+      semantics(matchResult).eval();
+    } catch (error) {
+    }
+  }
+
+  var wrapper = parent.appendChild(createElement('.pexpr'));
   wrapper.classList.add(pexpr.constructor.name.toLowerCase());
   wrapper.classList.toggle('failed', !traceNode.succeeded);
 
@@ -532,6 +678,19 @@ function createTraceElement(traceNode, parent, input) {
     defMark = cmUtil.clearMark(defMark);
     grammarEditor.getWrapperElement().classList.remove('highlighting');
     inputEditor.getWrapperElement().classList.remove('highlighting');
+  }
+
+  if (zoomStack.length !== 0) {
+    if (ruleName === zoomStack[zoomStack.length - 1].startRule &&
+      inputSeg.trim() === zoomStack[zoomStack.length - 1].input.trim()) {
+      if (input) {
+        input.classList.add('highlight');
+      }
+      wrapper.classList.add('zoom');
+      if (!zoomPic) {
+        wrapper.classList.add('noBorder');
+      }
+    }
   }
 
   wrapper.addEventListener('mouseover', function(e) {
@@ -585,13 +744,12 @@ function createTraceElement(traceNode, parent, input) {
       clearMarks();
     } else if (zoom) {
       if (wrapper.classList.contains('zoom')) {
-        wrapper.classList.remove('zoom');
-        // zoomOut(wrapper, traceNode);
+        zoomOut(wrapper, ruleName, inputSeg);
       } else {
-        wrapper.classList.add('zoom');
-        // zoomIn(wrapper, traceNode);
+        zoomIn(wrapper, ruleName, inputSeg, clearMarks);
       }
-      zoom = false;
+      clearMarks();
+      refresh(100);
     } else if (pexpr.constructor.name !== 'Prim') {
       toggleTraceElement(wrapper);
     }
@@ -607,92 +765,53 @@ function createTraceElement(traceNode, parent, input) {
     traceNode.succeeded &&
     pexpr.ruleName && pexpr.ruleName !== 'spaces') {
 
-    // TODO: remove
-    if (!semantics.getOperation('eval')) {
-      semantics.addOperation('eval', {
-        number: function(_) {
-          try {
-            var key = this.ctorName + '_from_' +
-              this.interval.startIdx + '_to_' +
-              this.interval.endIdx;
-            var ans = (() => {
-              return parseFloat(this.interval.contents);
-            })();
-          } catch (error) {
-            if (!todo) {
-              if (!error.expressionStack) {
-                error.expressionStack = key;
-              }
-              resultMap[key] = error;
-            }
-          } finally {
-            if (resultMap[key] instanceof Error) {
-              throw resultMap[key];
-            }
-            if (!ans && todo) {
-              ans = failure;
-            }
-            resultMap[key] = ans;
-            return ans;
-          }
-        },
-        _nonterminal: function(children) {
-          try {
-            var key = this.ctorName + '_from_' +
-              this.interval.startIdx + '_to_' +
-              this.interval.endIdx;
-            var ans = (() => {
-              if (children.length === 1) {
-                if (!passThrough) {
-                  passThrough = [];
-                }
-                passThrough.push(key);
-                return children[0].eval();
-              } else {
-                if (!todo) {
-                  todo = [];
-                }
-                todo.push(key);
-              }
-            })();
-          } catch (error) {
-            if (!todo) {
-              if (!error.expressionStack) {
-                error.expressionStack = key;
-              }
-              resultMap[key] = error;
-            } else {
-              ans = failure;
-            }
-          } finally {
-            if (resultMap[key] instanceof Error) {
-              throw resultMap[key];
-            }
-            if (!ans) {
-              ans = failure;
-            }
-            resultMap[key] = ans;
-            return ans;
-          }
-        }
-      });
-    }
-
     appendSemanticEditor(wrapper, traceNode, clearMarks);
   }
 
   return wrapper;
 }
 
-function refreshParseTree(input) {  // eslint-disable-line no-unused-vars
-  var trace = grammar.trace(input);
+function refreshParseTree(input, triggerRefresh) {
+  refresh = triggerRefresh;
+
+  // console.log('refresh', triggerRefresh, refresh);
+  var trace;
+  if (!zoomPic && zoomStack.length !== 0) {
+    $('#zoom').hidden = false;
+    var start = zoomStack[zoomStack.length - 1];
+    if (start.input.trim() === inputEditor.getValue().trim() &&
+      start.startRule === grammar.defaultStartRule) {
+      zoomStack.pop();
+      if (zoomStack.length > 0) {
+        $('#zoom').lastChild._elm = zoomStack[zoomStack.length - 1];
+        $('#zoom').hidden = true;
+      }
+      refreshParseTree(input, refresh);
+      return;
+    }
+    trace = grammar.trace(start.input, start.startRule);
+    if (trace.result.failed()) {
+      zoomStack.pop();
+      if (zoomStack.length > 0) {
+        $('#zoom').lastChild._elm = zoomStack[zoomStack.length - 1];
+        $('#zoom').hidden = true;
+      }
+      refreshParseTree(input, refresh);
+    }
+    // console.log(start.input, start.ruleName);
+  } else {
+    if (zoomStack.length === 0) {
+      $('#zoom').hidden = true;
+    }
+    trace = grammar.trace(input);
+  }
+  // var trace = grammar.trace(input);
   if (trace.result.failed()) {
     // Intervals with start == end won't show up in CodeMirror.
     var interval = trace.result.getInterval();
     interval.endIdx += 1;
     setError('input', inputEditor, interval, 'Expected ' + trace.result.getExpectedText());
   }
-
   var inputStack = [$('#expandedInput')];
   var containerStack = [$('#parseResults')];
 
