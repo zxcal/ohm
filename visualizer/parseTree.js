@@ -522,11 +522,9 @@ function initSemantics() {
         var key = this.ctorName + '_from_' +
           this.interval.startIdx + '_to_' +
           this.interval.endIdx;
-        /* eslint-disable */
         var ans = (() => {
           return parseFloat(this.interval.contents);
         })();
-        /* eslint-enable */
       } catch (error) {
         if (!todo) {
           if (!error.expression) {
@@ -550,7 +548,6 @@ function initSemantics() {
         var key = this.ctorName + '_from_' +
           this.interval.startIdx + '_to_' +
           this.interval.endIdx;
-        /* eslint-disable */
         var ans = (() => {
           if (children.length === 1) {
             if (!passThrough) {
@@ -565,7 +562,6 @@ function initSemantics() {
             todo.push(key);
           }
         })();
-        /* eslint-enable */
       } catch (error) {
         if (!todo) {
           if (!error.expression) {
@@ -577,7 +573,7 @@ function initSemantics() {
         if (resultMap[key] instanceof Error) {
           throw resultMap[key];
         }
-        if (!ans) {
+        if (!ans && todo) {
           ans = failure;
         }
         resultMap[key] = ans;
@@ -587,15 +583,21 @@ function initSemantics() {
   });
 }
 
+function isZoomAt(input, ruleName) {
+  if (zoomStack.length === 0) {
+    return false;
+  }
+
+  var elm = zoomStack[zoomStack.length - 1];
+  return elm.input.trim() === input.trim() &&
+      elm.startRule === ruleName;
+}
+
 function zoomOut(wrapper, ruleName, inputSeg){
   wrapper.classList.remove('zoom');
   wrapper.classList.remove('noBorder');
-  var zoomElm = zoomStack[zoomStack.length - 1];
-  while (zoomElm &&
-    (zoomElm.startRule !== ruleName ||
-      zoomElm.input.trim() !== inputSeg.trim())) {
+  while (!isZoomAt(inputSeg, ruleName)) {
     zoomStack.pop();
-    zoomElm = zoomStack[zoomStack.length - 1];
   }
   zoomStack.pop();
   if (zoomStack.length > 0) {
@@ -606,15 +608,7 @@ function zoomOut(wrapper, ruleName, inputSeg){
 }
 
 function zoomIn(wrapper, ruleName, inputSeg, clearMarks) {
-
-  if (zoomStack.length > 0 &&
-      zoomStack[zoomStack.length - 1].startRule === ruleName &&
-      zoomStack[zoomStack.length - 1].input.trim() === inputSeg.trim()) {
-    return;
-  }
-
   wrapper.classList.add('zoom');
-
   zoomStack.push({startRule: ruleName, input: inputSeg});
 
   if ($('#zoom').children.length > 0) {
@@ -680,16 +674,13 @@ function createTraceElement(traceNode, parent, input) {
     inputEditor.getWrapperElement().classList.remove('highlighting');
   }
 
-  if (zoomStack.length !== 0) {
-    if (ruleName === zoomStack[zoomStack.length - 1].startRule &&
-      inputSeg.trim() === zoomStack[zoomStack.length - 1].input.trim()) {
-      if (input) {
-        input.classList.add('highlight');
-      }
-      wrapper.classList.add('zoom');
-      if (!zoomPic) {
-        wrapper.classList.add('noBorder');
-      }
+  if (isZoomAt(inputSeg, ruleName)) {
+    if (input) {
+      input.classList.add('highlight');
+    }
+    wrapper.classList.add('zoom');
+    if (!zoomPic) {
+      wrapper.classList.add('noBorder');
     }
   }
 
@@ -771,16 +762,18 @@ function createTraceElement(traceNode, parent, input) {
   return wrapper;
 }
 
+
 function refreshParseTree(input, triggerRefresh) {
   refresh = triggerRefresh;
 
-  // console.log('refresh', triggerRefresh, refresh);
   var trace;
   if (!zoomPic && zoomStack.length !== 0) {
     $('#zoom').hidden = false;
     var start = zoomStack[zoomStack.length - 1];
-    if (start.input.trim() === inputEditor.getValue().trim() &&
-      start.startRule === grammar.defaultStartRule) {
+    trace = grammar.trace(start.input, start.startRule);
+
+    if (isZoomAt(inputEditor.getValue(), grammar.defaultStartRule) ||
+      trace.result.failed()) {
       zoomStack.pop();
       if (zoomStack.length > 0) {
         $('#zoom').lastChild._elm = zoomStack[zoomStack.length - 1];
@@ -789,15 +782,6 @@ function refreshParseTree(input, triggerRefresh) {
       refreshParseTree(input, refresh);
       return;
     }
-    trace = grammar.trace(start.input, start.startRule);
-    if (trace.result.failed()) {
-      zoomStack.pop();
-      if (zoomStack.length > 0) {
-        $('#zoom').lastChild._elm = zoomStack[zoomStack.length - 1];
-        $('#zoom').hidden = true;
-      }
-      refreshParseTree(input, refresh);
-    }
     // console.log(start.input, start.ruleName);
   } else {
     if (zoomStack.length === 0) {
@@ -805,7 +789,7 @@ function refreshParseTree(input, triggerRefresh) {
     }
     trace = grammar.trace(input);
   }
-  // var trace = grammar.trace(input);
+
   if (trace.result.failed()) {
     // Intervals with start == end won't show up in CodeMirror.
     var interval = trace.result.getInterval();
