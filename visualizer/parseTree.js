@@ -608,6 +608,10 @@ function zoomOut(wrapper, ruleName, inputSeg){
 }
 
 function zoomIn(wrapper, ruleName, inputSeg, clearMarks) {
+  if (!ruleName) {
+    return;
+  }
+
   wrapper.classList.add('zoom');
   zoomStack.push({startRule: ruleName, input: inputSeg});
 
