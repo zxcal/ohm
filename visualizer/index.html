@@ -255,14 +255,16 @@
     }
 
     #grammarContainer,
-    #inputContainer{
+    #inputContainer,
+    #semanticsContainer {
       display: flex;
       flex-direction: column;
       flex: 1;
     }
 
     #grammarContainer h2,
-    #inputContainer h2 {
+    #inputContainer h2,
+    #semanticsContainer h2 {
       color: #e0a;
       font-size: 1em;
       margin: 12px 12px 6px;
@@ -293,7 +295,7 @@
       border: white;
       outline: none;
     }
-    .semanticContainer .editorBody {
+    .exampleActionContainer .editorBody {
       margin-top: 3px;
       margin-bottom: 1px;
       border: 1px solid #ddd;
@@ -301,14 +303,14 @@
       min-width: 300px;
       overflow: auto
     }
-    .semanticContainer .editorBody .CodeMirror {
+    .exampleActionContainer .editorBody .CodeMirror {
       font-family: Menlo, Monaco, sans-serif;
       font-size: 12px;
     }
-    .semanticContainer.hidden .editor{
+    .exampleActionContainer.hidden .editor{
       display: none;
     }
-    .semanticContainer .semanticResult {
+    .exampleActionContainer .semanticResult {
       padding-bottom: 2px;
       background-color: #efefef;
       font: 12px Monaco, sans-serif;
@@ -318,7 +320,7 @@
       margin-bottom: 5px;
       margin-top: -1px;
     }
-    .semanticContainer .semanticResult.error {
+    .exampleActionContainer .semanticResult.error {
       background-color: rgb(255, 215, 222);
       color: red;
     }
@@ -374,10 +376,10 @@
     .CodeMirror-lines pre {
       padding-left: 14px;
     }
-    .semanticContainer .editorBody .CodeMirror-lines {
+    .exampleActionContainer .editorBody .CodeMirror-lines {
       padding: 8px;
     }
-    .semanticContainer .editorBody .CodeMirror-lines pre {
+    .exampleActionContainer .editorBody .CodeMirror-lines pre {
       padding-left: 0px;
     }
 
@@ -463,6 +465,11 @@
     <div id="topSplitter" class="splitter vertical"></div>
     <div id="grammarContainer">
       <h2>Grammar</h2>
+      <div class="flex-fix"><div class="editorWrapper"></div></div>
+    </div>
+    <div id="topSplitter" class="splitter vertical"></div>
+    <div id="semanticsContainer">
+      <h2>Semantics</h2>
       <div class="flex-fix"><div class="editorWrapper"></div></div>
     </div>
   </div>

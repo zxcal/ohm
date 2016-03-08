@@ -13,6 +13,11 @@ var UnicodeChars = {
 };
 
 var resultMap, todo, passThrough;
+function initActionLog() {
+  resultMap = undefined;
+  todo = undefined;
+  passThrough = undefined;
+}
 var zoom = false, zoomStack = [];
 var refresh;
 var zoomPic;
@@ -84,7 +89,7 @@ function measureSize(wrapperEl, selector) {
 function measureContent(wrapperEl) {
   var labelMeasurement = measureLabel(wrapperEl);
 
-  var semanticEditorMeasurement = measureSize(wrapperEl, 'semanticContainer');
+  var semanticEditorMeasurement = measureSize(wrapperEl, 'exampleActionContainer');
   var result = {
     width: Math.max(semanticEditorMeasurement.width, labelMeasurement.width),
     height: semanticEditorMeasurement.height
@@ -346,55 +351,49 @@ function getSemanticArgs(header, optArgs) {
       ans.push(optArgs[i - 1]);
     }
   }
-  // console.log('args', ans);
   return ans;
 }
 
-function saveSemanticAction(traceNode, funcStr, actionType, actionName, semanticContainer) {
+function saveSemanticAction(traceNode, funcStr, actionType, actionName, exampleActionContainer) {
   var func;
-  try {
-    // TODO: translate the simpler editing language to javascript function
-    if (funcStr.trim().length !== 0) {
-      var argStr = '(' + getSemanticArgs(semanticContainer.children[0].children[0],
-        getArgString(getArgExpr(traceNode))) + ')';
-      funcStr = '{\n' +
-          '  try {\n' +
-          '    var key = this.ctorName + "_from_" + \n' +
-          '      this.interval.startIdx + "_to_" + \n' +
-          '      this.interval.endIdx;\n  ' +
-          '    var ans = (() => { ' + funcStr + ' })();\n' +
-          '  } catch (error) {\n' +
-          '    if (!todo) {\n' +
-          '      if (!error.expression) {\n' +
-          '        error.expression = key;\n' +
-          '      }\n' +
-          '      resultMap[key] = error;\n' +
-          '    }\n' +
-          '  } finally {\n' +
-          '    if (resultMap[key] instanceof Error) {\n' +
-          '      throw resultMap[key];\n' +
-          '     }\n' +
-          '    if (!ans && todo) {\n' +
-          '      ans = failure;\n' +
-          '    }\n' +
-          '    resultMap[key] = ans;\n' +
-          '    return ans;\n' +
-          '  }\n' +
-        '}';
-      console.log('function' + argStr + funcStr);  // eslint-disable-line no-console
-      func = eval('(function' + argStr + funcStr + ')'); // eslint-disable-line no-eval
-    }
-    semantics['get' + actionType](actionName).actionDict[traceNode.expr.ruleName] = func;
-
-    // Trigger to refresh the parsing result
-    grammarEditor.getWrapperElement().classList.remove('highlighting');
-    inputEditor.getWrapperElement().classList.remove('highlighting');
-    refresh(100);
-    // restoreEditorState(inputEditor, 'input', $('#sampleInput'));
-  } catch (error) {
-    semanticContainer.children[1].className = 'semanticResult error';
-    semanticContainer.children[1].textContent = error.message;
+  if (funcStr.trim().length !== 0) {
+    var argStr = '(' + getSemanticArgs(exampleActionContainer.firstChild.firstChild,
+      getArgString(getArgExpr(traceNode))) + ')';
+    funcStr = '{\n' +
+        '  try {\n' +
+        '    var key = this.ctorName + "_from_" + \n' +
+        '      this.interval.startIdx + "_to_" + \n' +
+        '      this.interval.endIdx;\n' +
+        '    var ans = (() => { ' + funcStr + ' })();\n' +
+        '  } catch (error) {\n' +
+        '    if (!todo) {\n' +
+        '      if (!error.expression) {\n' +
+        '        error.expression = key;\n' +
+        '      }\n' +
+        '      resultMap[key] = error;\n' +
+        '    }\n' +
+        '  } finally {\n' +
+        '    if (resultMap[key] instanceof Error) {\n' +
+        '      throw resultMap[key];\n' +
+        '     }\n' +
+        '    if (!ans && todo) {\n' +
+        '      ans = failure;\n' +
+        '    }\n' +
+        '    resultMap[key] = ans;\n' +
+        '    return ans;\n' +
+        '  }\n' +
+      '}';
+    console.log('function' + argStr + funcStr);  // eslint-disable-line no-console
+    func = eval('(function' + argStr + funcStr + ')'); // eslint-disable-line no-eval
   }
+  semantics['get' + actionType](actionName).actionDict[traceNode.expr.ruleName] = func;
+
+  // Trigger to refresh the parsing result
+  grammarEditor.getWrapperElement().classList.remove('highlighting');
+  inputEditor.getWrapperElement().classList.remove('highlighting');
+
+  refresh(100);
+  // restoreEditorState(inputEditor, 'input', $('#sampleInput'));
 }
 
 function loadHeader(traceNode, header, optArgStr) {
@@ -403,7 +402,6 @@ function loadHeader(traceNode, header, optArgStr) {
 
   var expr = getArgExpr(traceNode);
   var displayStrs = getArgDisplay(expr);
-  // console.log(expr, expr.ruleName, displayStrs);
   var defaultArgStrs = getArgString(expr);
   displayStrs.forEach(function(display, idx) {
     var arg = header.appendChild(createElement('.block'));
@@ -429,10 +427,35 @@ function loadHeader(traceNode, header, optArgStr) {
   });
 }
 
+function retrieveFunc(ruleName) {
+  var funcObj = Object.create(null);
+
+  // TODO: ['get'+actionType](actionName)
+  var actionFn = semantics.getOperation('eval').actionDict[ruleName];
+  if (actionFn) {
+    var actionFnStr = actionFn.toString();
+    funcObj.args = [];
+    actionFnStr.substring(actionFnStr.indexOf('(') + 1, actionFnStr.indexOf(')'))
+      .split(',').forEach(function(arg) {
+        funcObj.args.push(arg.trim());
+      });
+
+    var startIdx = actionFnStr.indexOf('var ans = (() => {') + 18;
+    var nextIdx = actionFnStr.indexOf('})();', startIdx);
+    var endIdx;
+    while (nextIdx >= 0) {
+      endIdx = nextIdx;
+      nextIdx = actionFnStr.indexOf('})();', nextIdx + 6);
+    }
+    funcObj.body = actionFnStr.substring(startIdx, endIdx);
+  }
+  return funcObj;
+}
+
 function appendSemanticEditor(wrapper, traceNode, clearMarks) {
   var ruleName = traceNode.expr.ruleName;
-  var semanticContainer = wrapper.appendChild(createElement('.semanticContainer'));
-  var editorWrap = semanticContainer.appendChild(createElement('.editor'));
+  var exampleActionContainer = wrapper.appendChild(createElement('.exampleActionContainer'));
+  var editorWrap = exampleActionContainer.appendChild(createElement('.editor'));
 
   // Editor header
   var header = editorWrap.appendChild(createElement('.editorHeader'));
@@ -443,60 +466,40 @@ function appendSemanticEditor(wrapper, traceNode, clearMarks) {
   semanticEditor.setOption('extraKeys', {
     'Cmd-S': function(cm) {
       clearMarks();
-      // TODO: need to be modified, action type and action name
-      saveSemanticAction(traceNode, cm.getValue(), 'Operation', 'eval', semanticContainer);
+      try {
+        // TODO: need to be modified, action type and action name
+        saveSemanticAction(traceNode, cm.getValue(), 'Operation', 'eval', exampleActionContainer);
+      } catch (error) {
+        editorWrap.nextElementSibling.className = 'semanticResult error';
+        editorWrap.nextElementSibling.textContent = error.message;
+      }
     }
   });
 
-  // TODO: ['get'+actionType](actionName)
-  var actionFn = semantics.getOperation('eval').actionDict[ruleName];
-
-  var optArgStr;
-  if (actionFn) {
-    var actionFnStr = actionFn.toString();
-    optArgStr = [];
-    actionFnStr.substring(actionFnStr.indexOf('(') + 1, actionFnStr.indexOf(')'))
-      .split(',').forEach(function(arg) {
-        optArgStr.push(arg.trim());
-      });
-    actionFnStr = actionFnStr.trim();
-
-    var startIdx = actionFnStr.indexOf('var ans = (() => {') + 18;
-    var nextIdx = actionFnStr.indexOf('})();', startIdx);
-    var endIdx;
-    while (nextIdx >= 0) {
-      endIdx = nextIdx;
-      nextIdx = actionFnStr.indexOf('})();', nextIdx + 6);
-    }
-    var actionFnBody = actionFnStr.substring(startIdx, endIdx);
-    semanticEditor.setValue(actionFnBody);
-  }
-  loadHeader(traceNode, header, optArgStr);
+  var funcObj = retrieveFunc(ruleName);
+  semanticEditor.setValue(funcObj.body || '');
+  loadHeader(traceNode, header, funcObj.args);
 
   // Add semantic action result
   var key = ruleName + '_from_' +
     traceNode.interval.trimmed().startIdx + '_to_' +
     traceNode.interval.trimmed().endIdx;
   var res = resultMap[key];
-  var resultContainer;
+  var resultContainer = exampleActionContainer.appendChild(createElement('.semanticResult'));
   if (res instanceof Error) {
-    resultContainer = semanticContainer.appendChild(createElement('.semanticResult.error'));
-    var e = res;
-    if (e.expression === key) {
+    resultContainer.classList.add('error');
+    resultContainer.textContent = res.message;
+    if (res.expression === key) {
       wrapper.children[0].classList.add('mark');
     }
-    // Showing error message only when it actually has semantic action
-    resultContainer.textContent = e.message;
-  // } else if (res === undefined && todo){
   } else if (res === failure) {
-    resultContainer = semanticContainer.appendChild(createElement('.semanticResult.error'));
+    resultContainer.classList.add('error');
     if (todo.includes(key)) {
       wrapper.children[0].classList.add('mark');
     }
   } else {
-    resultContainer = semanticContainer.appendChild(createElement('.semanticResult', res));
+    resultContainer.textContent = res;
   }
-  // console.log(ruleName, res, todo);
 
   // The result comes from `_nonterminal`
   if (passThrough && passThrough.includes(key)) {
@@ -504,15 +507,14 @@ function appendSemanticEditor(wrapper, traceNode, clearMarks) {
   }
 
   // Hide result if it's an error, or it gets from `_nonterminal`,
-  // evaluating process haven't get to it accroding to the top-down
-  // left-to-right order
+  // evaluating process haven't get to it
   if (resultContainer.classList.contains('error') ||
     wrapper.children[0].classList.contains('passThrough') ||
-    res === undefined) {
+    !res) {
     resultContainer.classList.add('hidden');
     resultContainer.hidden = true;
   }
-  semanticContainer.classList.add('hidden');
+  exampleActionContainer.classList.add('hidden');
 }
 
 function initSemantics() {
@@ -608,41 +610,54 @@ function zoomOut(wrapper, ruleName, inputSeg){
 }
 
 function zoomIn(wrapper, ruleName, inputSeg, clearMarks) {
-  if (!ruleName) {
+  // console.log(inputSeg, ruleName);
+  if (!ruleName || isZoomAt(inputSeg, ruleName)) {
     return;
   }
 
   wrapper.classList.add('zoom');
   zoomStack.push({startRule: ruleName, input: inputSeg});
 
-  if ($('#zoom').children.length > 0) {
-    $('#zoom').removeChild($('#zoom').lastChild);
-  }
-
+  $('#zoom').innerHTML = '';
   var zoomElm = $('#zoom').appendChild(createElement('.zoomElm', 'Zoom Out'));
   zoomElm._elm = zoomStack[zoomStack.length - 1];
 
-  zoomPic = undefined;
   zoomElm.addEventListener('click', function(e) {
     zoomPic = undefined;
     $('#zoom').removeChild(zoomElm);
     zoomStack = [];
     clearMarks();
     refresh(100);
+    e.stopPropagation();
+    e.preventDefault();
   });
-
   zoomElm.addEventListener('mouseover', function(e) {
     zoomPic = {
       elm: zoomElm._elm
     };
     clearMarks();
     refresh(100);
+    e.stopPropagation();
+    e.preventDefault();
   });
   zoomElm.addEventListener('mouseout', function(e) {
     zoomPic = undefined;
     clearMarks();
     refresh(100);
+    e.stopPropagation();
+    e.preventDefault();
   });
+}
+
+function populateResult(input, startRule) {
+  var matchResult = grammar.match(input, startRule);
+  resultMap = Object.create(null);
+  if (!semantics.getOperation('eval')) {
+    initSemantics();
+  }
+  try {
+    semantics(matchResult).eval();
+  } catch (error) { }
 }
 
 function createTraceElement(traceNode, parent, input) {
@@ -650,21 +665,21 @@ function createTraceElement(traceNode, parent, input) {
   var ruleName = pexpr.ruleName;
   var inputSeg = traceNode.interval.contents;
   if (options.eval && !resultMap) {
-    var matchResult = grammar.match(inputSeg, ruleName);
-    resultMap = Object.create(null);
-
-    if (!semantics.getOperation('eval')) {
-      initSemantics();
-    }
-    try {
-      semantics(matchResult).eval();
-    } catch (error) {
-    }
+    populateResult(inputSeg, ruleName);
   }
 
   var wrapper = parent.appendChild(createElement('.pexpr'));
   wrapper.classList.add(pexpr.constructor.name.toLowerCase());
   wrapper.classList.toggle('failed', !traceNode.succeeded);
+  if (isZoomAt(inputSeg, ruleName)) {
+    if (input) {
+      input.classList.add('highlight');
+    }
+    wrapper.classList.add('zoom');
+    if (!zoomPic) {
+      wrapper.classList.add('noBorder');
+    }
+  }
 
   var inputMark, grammarMark, defMark;
   function clearMarks() {
@@ -676,16 +691,6 @@ function createTraceElement(traceNode, parent, input) {
     defMark = cmUtil.clearMark(defMark);
     grammarEditor.getWrapperElement().classList.remove('highlighting');
     inputEditor.getWrapperElement().classList.remove('highlighting');
-  }
-
-  if (isZoomAt(inputSeg, ruleName)) {
-    if (input) {
-      input.classList.add('highlight');
-    }
-    wrapper.classList.add('zoom');
-    if (!zoomPic) {
-      wrapper.classList.add('noBorder');
-    }
   }
 
   wrapper.addEventListener('mouseover', function(e) {
@@ -703,7 +708,6 @@ function createTraceElement(traceNode, parent, input) {
       cmUtil.scrollToInterval(grammarEditor, pexpr.interval);
     }
 
-    var ruleName = pexpr.ruleName;
     if (ruleName) {
       var defInterval = grammar.ruleBodies[ruleName].definitionInterval;
       if (defInterval) {
@@ -719,7 +723,7 @@ function createTraceElement(traceNode, parent, input) {
   });
   wrapper._input = input;
 
-  var text = pexpr.ruleName === 'spaces' ? UnicodeChars.WHITE_BULLET : traceNode.displayString;
+  var text = ruleName === 'spaces' ? UnicodeChars.WHITE_BULLET : traceNode.displayString;
   // Truncate the label if it is too long.
   if (text.length > 20 && text.indexOf(' ') >= 0) {
     text = text.slice(0, 20) + UnicodeChars.HORIZONTAL_ELLIPSIS;
@@ -729,7 +733,7 @@ function createTraceElement(traceNode, parent, input) {
   label.setAttribute('title', text);
   toggleClasses(label, {
     prim: isPrimitive(traceNode.expr),
-    spaces: pexpr.ruleName === 'spaces'
+    spaces: ruleName === 'spaces'
   });
   label.addEventListener('click', function(e) {
     if (e.altKey && !(e.shiftKey || e.metaKey)) {
@@ -758,8 +762,7 @@ function createTraceElement(traceNode, parent, input) {
   // Append semantic editor to the node
   if (options.eval &&
     traceNode.succeeded &&
-    pexpr.ruleName && pexpr.ruleName !== 'spaces') {
-
+    ruleName && ruleName !== 'spaces') {
     appendSemanticEditor(wrapper, traceNode, clearMarks);
   }
 
@@ -776,8 +779,7 @@ function refreshParseTree(input, triggerRefresh) {
     var start = zoomStack[zoomStack.length - 1];
     trace = grammar.trace(start.input, start.startRule);
 
-    if (isZoomAt(inputEditor.getValue(), grammar.defaultStartRule) ||
-      trace.result.failed()) {
+    if (trace.result.failed() || isZoomAt(input, grammar.defaultStartRule)) {
       zoomStack.pop();
       if (zoomStack.length > 0) {
         $('#zoom').lastChild._elm = zoomStack[zoomStack.length - 1];
@@ -786,26 +788,25 @@ function refreshParseTree(input, triggerRefresh) {
       refreshParseTree(input, refresh);
       return;
     }
-    // console.log(start.input, start.ruleName);
+    // console.log(start.input, start.startRule);
   } else {
-    if (zoomStack.length === 0) {
-      $('#zoom').hidden = true;
-    }
+    $('#zoom').hidden = (zoomStack.length === 0);
+
     trace = grammar.trace(input);
+    // console.log(trace);
+    if (trace.result.failed()) {
+      // Intervals with start == end won't show up in CodeMirror.
+      var interval = trace.result.getInterval();
+      interval.endIdx += 1;
+      setError('input', inputEditor, interval, 'Expected ' + trace.result.getExpectedText());
+    }
   }
 
-  if (trace.result.failed()) {
-    // Intervals with start == end won't show up in CodeMirror.
-    var interval = trace.result.getInterval();
-    interval.endIdx += 1;
-    setError('input', inputEditor, interval, 'Expected ' + trace.result.getExpectedText());
-  }
+
   var inputStack = [$('#expandedInput')];
   var containerStack = [$('#parseResults')];
 
-  resultMap = undefined;
-  todo = undefined;
-  passThrough = undefined;
+  initActionLog();
   trace.walk({
     enter: function(node, parent, depth) {
       // Don't recurse into nodes that didn't succeed unless "Show failures" is enabled.

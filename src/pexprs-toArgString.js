@@ -29,10 +29,13 @@ pexprs.Prim.prototype.toArgString =
 pexprs.Range.prototype.toArgString =
 pexprs.Lex.prototype.toArgString =
 pexprs.Value.prototype.toArgString =
-pexprs.Alt.prototype.toArgString =
 pexprs.Obj.prototype.toArgString =
 pexprs.UnicodeChar.prototype.toArgString = function() {
   return '';
+};
+
+pexprs.Alt.prototype.toArgString = function() {
+  return 'alt_option';
 };
 
 pexprs.Param.prototype.toArgString = function() {
