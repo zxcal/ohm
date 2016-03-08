@@ -1,6 +1,6 @@
 /* eslint-env browser */
 /* global cmUtil, createElement, d3, getWidthDependentElements, grammarEditor, inputEditor */
-/* global options, setError, CodeMirror, grammar, semantics*/
+/* global options, setError, CodeMirror, grammar, semantics, zoomKey, zoomStack, zoomPic */
 
 'use strict';
 
@@ -18,17 +18,16 @@ function initActionLog() {
   todo = undefined;
   passThrough = undefined;
 }
-var zoom = false, zoomStack = [];
+
 var refresh;
-var zoomPic;
 document.addEventListener('keydown', function(e) {
   if (e.keyCode === 90) {
-    zoom = true;
+    zoomKey = true;
   }
 });
 document.addEventListener('keyup', function(e) {
   if (e.keyCode === 90) {
-    zoom = false;
+    zoomKey = false;
   }
 });
 
@@ -741,7 +740,7 @@ function createTraceElement(traceNode, parent, input) {
     } else if (e.metaKey && !e.shiftKey && options.eval/* TODO: modify option check */) {
       toggleSemanticEditor(wrapper); // cmd + click to open or close semantic editor
       clearMarks();
-    } else if (zoom) {
+    } else if (zoomKey) {
       if (wrapper.classList.contains('zoom')) {
         zoomOut(wrapper, ruleName, inputSeg);
       } else {
@@ -788,12 +787,10 @@ function refreshParseTree(input, triggerRefresh) {
       refreshParseTree(input, refresh);
       return;
     }
-    // console.log(start.input, start.startRule);
   } else {
     $('#zoom').hidden = (zoomStack.length === 0);
 
     trace = grammar.trace(input);
-    // console.log(trace);
     if (trace.result.failed()) {
       // Intervals with start == end won't show up in CodeMirror.
       var interval = trace.result.getInterval();

@@ -12,6 +12,12 @@ var grammarEditor = CodeMirror($('#grammarContainer .editorWrapper'));
 // Expose the grammar globally so that it can easily be accessed from the console.
 var grammar = null;
 var semantics = null; // eslint-disable-line no-unused-vars
+var zoomKey = false, zoomStack = [], zoomPic; // eslint-disable-line no-unused-vars
+function initZoom() {
+  zoomKey = false;
+  zoomStack = [];
+  zoomPic = undefined;
+}
 // Misc Helpers
 // ------------
 
@@ -139,10 +145,11 @@ function parseGrammar(source) {
   restoreEditorState(inputEditor, 'input', $('#sampleInput'));
   restoreEditorState(grammarEditor, 'grammar', $('#sampleGrammar'));
 
-  inputEditor.on('change', function() { triggerRefresh(250); });
+  inputEditor.on('change', function() { initZoom(); triggerRefresh(250); });
   grammarEditor.on('change', function() {
     grammarChanged = true;
     hideError('grammar', grammarEditor);
+    initZoom();
     triggerRefresh(250);
   });
 
