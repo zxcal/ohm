@@ -9,7 +9,8 @@ function $(sel) { return document.querySelector(sel); }
 
 var UnicodeChars = {
   HORIZONTAL_ELLIPSIS: '\u2026',
-  WHITE_BULLET: '\u25E6'
+  WHITE_BULLET: '\u25E6',
+  BACK: '\u21BA'
 };
 
 var resultMap, todo, passThrough;
@@ -336,7 +337,8 @@ function getArgString(expr) {
   if (expr.constructor.name === 'Seq') {
     ans = expr.toArgString().split(',');
   } else {
-    ans.push(expr.toArgString());
+    var arg = expr.toArgString();
+    ans.push(arg.length === 0 ? '$1' : arg);
   }
   return ans;
 }
@@ -408,6 +410,9 @@ function loadHeader(traceNode, header, optArgStr) {
     var nameEditor = arg.appendChild(createElement('textarea.represent'));
     if (!optArgStr || optArgStr[idx] === defaultArgStrs[idx]) {
       nameEditor.hidden = true;
+      if (defaultArgStrs[idx] !== display) {
+        nameEditor.value = defaultArgStrs[idx];
+      }
     } else {
       nameEditor.value = optArgStr[idx];
     }
@@ -610,15 +615,18 @@ function zoomOut(wrapper, ruleName, inputSeg){
 
 function zoomIn(wrapper, ruleName, inputSeg, clearMarks) {
   // console.log(inputSeg, ruleName);
-  if (!ruleName || isZoomAt(inputSeg, ruleName)) {
+  var label = wrapper.firstChild;
+  if (!label.classList.contains('zoom')) {
     return;
   }
 
+  label.classList.remove('zoom');
   wrapper.classList.add('zoom');
+
   zoomStack.push({startRule: ruleName, input: inputSeg});
 
   $('#zoom').innerHTML = '';
-  var zoomElm = $('#zoom').appendChild(createElement('.zoomElm', 'Zoom Out'));
+  var zoomElm = $('#zoom').appendChild(createElement('.zoomElm', UnicodeChars.BACK));
   zoomElm._elm = zoomStack[zoomStack.length - 1];
 
   zoomElm.addEventListener('click', function(e) {
@@ -756,6 +764,33 @@ function createTraceElement(traceNode, parent, input) {
     }
     e.stopPropagation();
     e.preventDefault();
+  });
+
+  label.addEventListener('mouseover', function(e) {
+    if (zoomKey) {
+      var result = grammar.match(inputSeg, ruleName);
+      if (isZoomAt(inputSeg, ruleName)) {
+        label.classList.add('zoomOut');
+      } else if (ruleName && result.succeeded() &&
+        !(inputSeg.trim() === inputEditor.getValue().trim() &&
+          ruleName === grammar.defaultStartRule)) {
+        label.classList.add('zoom');
+      } else {
+        label.classList.add('noZoom');
+      }
+    }
+  });
+
+  label.addEventListener('mouseout', function(e) {
+    if (label.classList.contains('zoom')) {
+      label.classList.remove('zoom');
+    }
+    if (label.classList.contains('noZoom')) {
+      label.classList.remove('noZoom');
+    }
+    if (label.classList.contains('zoomOut')) {
+      label.classList.remove('zoomOut');
+    }
   });
 
   // Append semantic editor to the node
