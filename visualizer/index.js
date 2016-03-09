@@ -1,5 +1,5 @@
 /* eslint-env browser */
-/* global cmUtil, CodeMirror, ohm, refreshParseTree, searchBar, updateExternalRules */
+/* global cmUtil, CodeMirror, ohm, refreshParseTree, searchBar, updateExternalRules, initZoom */
 
 'use strict';
 
@@ -12,12 +12,7 @@ var grammarEditor = CodeMirror($('#grammarContainer .editorWrapper'));
 // Expose the grammar globally so that it can easily be accessed from the console.
 var grammar = null;
 var semantics = null; // eslint-disable-line no-unused-vars
-var zoomKey = false, zoomStack = [], zoomPic; // eslint-disable-line no-unused-vars
-function initZoom() {
-  zoomKey = false;
-  zoomStack = [];
-  zoomPic = undefined;
-}
+
 // Misc Helpers
 // ------------
 

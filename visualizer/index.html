@@ -177,18 +177,14 @@
       cursor: pointer;
     }
     #zoom .zoomElm {
-      background-color: rgb(181, 213, 255);
-      padding: 3px;
       margin-top: 2px;
       margin-bottom: 2px;
-      font-size: 12px;
-      font-style: normal;
+      font-size: 25px;
       color: black;
       text-align: center;
-      border-radius: 5px;
     }
     #zoom .zoomElm:hover {
-      background-color: hsla(216,89%,62%,.5);
+      font-weight: bold;
     }
 
     #visualizerBody {
@@ -289,8 +285,9 @@
     }
     textarea.represent {
       margin-top: 8px;
+      height: 12px;
       resize: none;
-      font: italic 2pt Menlo, Monaco, sans-serif;
+      font: italic 12px Menlo, Monaco, sans-serif;
       color:  #FF8D00;
       border: white;
       outline: none;
@@ -486,24 +483,23 @@
   <div id="dragOverlay"></div>
   <div id="options">
     <!-- <label><input type="checkbox" name="showFailures"> Show failures</label> -->
-    <label><input type="checkbox" name="eval">Eval</label>
+    <label><input type="checkbox" name="eval">eval</label>
   </div>
 
-<!--   
-  <div id="semanticSelecter">
-    <select id="actions">
-      <option value="default">[select action]</option>
-    </select>
-    <button id="add">+</button>
-    <div id="newAction">
-      <textarea id="actionName" style="resize:none;"></textarea>
-      <select id="tag">
-        <option value="Operation">operation</option>
-        <option value="Attribute">attribute</option>
-      </select>
-    </div>
-  </div>
- -->
+  
+<!--   <div id="semanticSelecter">
+    <input type='text' list='operation'>
+    <button>+</button>
+    <input type='text' list='attribute'>
+    <button>+</button>
+    <datalist id='operation'>
+       <option label='operation' value='eval'>
+    </datalist>
+    <datalist id='attribute'>
+      <option label='attribute' value='name'>
+    </datalist>
+  </div> -->
+
   <div id="measuringDiv">
     <div class="pexpr"></div>
   </div>

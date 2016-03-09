@@ -1,6 +1,6 @@
 /* eslint-env browser */
 /* global cmUtil, createElement, d3, getWidthDependentElements, grammarEditor, inputEditor */
-/* global options, setError, CodeMirror, grammar, semantics, zoomKey, zoomStack, zoomPic */
+/* global options, setError, CodeMirror, grammar, semantics */
 
 'use strict';
 
@@ -9,7 +9,8 @@ function $(sel) { return document.querySelector(sel); }
 
 var UnicodeChars = {
   HORIZONTAL_ELLIPSIS: '\u2026',
-  WHITE_BULLET: '\u25E6'
+  WHITE_BULLET: '\u25E6',
+  BACK: '\u21BA'
 };
 
 var resultMap, todo, passThrough;
@@ -20,6 +21,13 @@ function initActionLog() {
 }
 
 var refresh;
+var zoomKey = false, zoomStack = [], zoomPic;
+function initZoom() { // eslint-disable-line no-unused-vars
+  zoomKey = false;
+  zoomStack = [];
+  zoomPic = undefined;
+}
+
 document.addEventListener('keydown', function(e) {
   if (e.keyCode === 90) {
     zoomKey = true;
@@ -618,7 +626,7 @@ function zoomIn(wrapper, ruleName, inputSeg, clearMarks) {
   zoomStack.push({startRule: ruleName, input: inputSeg});
 
   $('#zoom').innerHTML = '';
-  var zoomElm = $('#zoom').appendChild(createElement('.zoomElm', 'Zoom Out'));
+  var zoomElm = $('#zoom').appendChild(createElement('.zoomElm', UnicodeChars.BACK));
   zoomElm._elm = zoomStack[zoomStack.length - 1];
 
   zoomElm.addEventListener('click', function(e) {
