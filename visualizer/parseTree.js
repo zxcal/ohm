@@ -21,15 +21,54 @@ function initActionLog() {
 }
 
 var refresh;
+var tutorialTime;
 document.addEventListener('keydown', function(e) {
   if (e.keyCode === 90) {
     zoomKey = true;
+    if (tutorialTime) {
+      clearTimeout(tutorialTime);
+    }
+    tutorialTime = setTimeout(function() {
+      $('#bottomSection .overlay').textContent = 'select node to zoom in';
+      if (zoomStack.length !== 0) {
+        $('#bottomSection .overlay').textContent += '\nclick root or ↺ to zoom out';
+      }
+      showBottomOverlay();
+    }, 250);
+  } else if (e.metaKey && options.eval) {
+    if (tutorialTime) {
+      clearTimeout(tutorialTime);
+    }
+    tutorialTime = setTimeout(function() {
+      $('#bottomSection .overlay').textContent = 'select node to open, or close its editor';
+      showBottomOverlay();
+    }, 250);
   }
 });
 document.addEventListener('keyup', function(e) {
+  $('#bottomSection .overlay').textContent = '';
+  hideBottomOverlay();
+  clearTimeout(tutorialTime);
+  tutorialTime = undefined;
   if (e.keyCode === 90) {
     zoomKey = false;
   }
+});
+document.addEventListener('mousemove', function(e) {
+  if (tutorialTime) {
+    $('#bottomSection .overlay').textContent = '';
+    hideBottomOverlay();
+    clearTimeout(tutorialTime);
+  }
+  tutorialTime = undefined;
+});
+document.addEventListener('click', function(e) {
+  if (tutorialTime) {
+    $('#bottomSection .overlay').textContent = '';
+    hideBottomOverlay();
+    clearTimeout(tutorialTime);
+  }
+  tutorialTime = undefined;
 });
 
 function Fail() { }
@@ -500,6 +539,7 @@ function appendSemanticEditor(wrapper, traceNode, clearMarks) {
     resultContainer.classList.add('error');
     if (todo.includes(key)) {
       wrapper.children[0].classList.add('mark');
+      resultContainer.textContent = 'Missing Semantics Action';
     }
   } else {
     resultContainer.textContent = res;
