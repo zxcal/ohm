@@ -139,11 +139,9 @@
       border: 2px solid blue;
     }
     .pexpr.zoom.noBorder {
-      border-top: 1px solid blue;
-      border-left: 0;
-      border-bottom: 0;
-      border-right: 0;
-    }
+      border: 0;
+/*      border-top: 5px solid blue;
+*/    }
     .pexpr > .children {
       display: flex;
       flex-direction: row;
@@ -182,18 +180,19 @@
     }
 
     #zoom {
-      margin-top: 8px;
-      margin-left: 50px;
-      position: fixed;
-      right: 20px;
+      background-color: white;
+      border: 0;
+      padding: 3px;
+      margin-top: 5px;
+      margin-right: 10px;
+      float: left;
+      left: 20px;
       cursor: pointer;
-    }
-    #zoom .zoomElm {
-      font-size: 25px;
+      font-size: 18px;
       color: black;
       text-align: center;
     }
-    #zoom .zoomElm:hover {
+    #zoom:hover {
       font-weight: bold;
     }
 
@@ -489,12 +488,12 @@
   </div>
   <div id="mainSplitter" class="splitter"></div>
   <div id="bottomSection">
+    <button id="zoom" type="button" hidden></button>
     <div id="visualizerBody">
       <div id="expandedInput"></div>
       <div id="parseResults"></div>
       <div class="overlay"></div>
     </div>
-    <div id="zoom" hidden></div>
   </div>
   <div id="dragOverlay"></div>
   <div id="options">

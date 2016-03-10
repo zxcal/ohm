@@ -23,11 +23,12 @@ function initActionLog() {
 var refresh;
 var tutorialTime;
 document.addEventListener('keydown', function(e) {
+  if (tutorialTime) {
+    clearTimeout(tutorialTime);
+  }
+  
   if (e.keyCode === 90) {
     zoomKey = true;
-    if (tutorialTime) {
-      clearTimeout(tutorialTime);
-    }
     tutorialTime = setTimeout(function() {
       $('#bottomSection .overlay').textContent = 'select node to zoom in';
       if (zoomStack.length !== 0) {
@@ -35,14 +36,25 @@ document.addEventListener('keydown', function(e) {
       }
       showBottomOverlay();
     }, 250);
-  } else if (e.metaKey && options.eval) {
-    if (tutorialTime) {
-      clearTimeout(tutorialTime);
-    }
+  } else if (e.keyCode !== 83 && e.metaKey && options.eval) {
     tutorialTime = setTimeout(function() {
       $('#bottomSection .overlay').textContent = 'select node to open, or close its editor';
       showBottomOverlay();
+    }, 1000);
+  } else if (e.keyCode === 77) {
+    tutorialTime = setTimeout(function() {
+      if (!options.eval) {
+        $('#bottomSection .overlay').textContent = 'Press z to active zoom mode\n' +
+          'Check eval to evaluate the expression\n';
+      } else {
+        $('#bottomSection .overlay').textContent = 'Press z to active zoom mode\n' +
+          'Press command to toggle semantics editor\n';
+      }
+      showBottomOverlay();
     }, 250);
+  } else {
+    $('#bottomSection .overlay').innerHTML = '';
+    hideBottomOverlay();
   }
 });
 document.addEventListener('keyup', function(e) {
@@ -647,7 +659,7 @@ function zoomOut(wrapper, ruleName, inputSeg){
   }
   zoomStack.pop();
   if (zoomStack.length > 0) {
-    $('#zoom').lastChild._elm = zoomStack[zoomStack.length - 1];
+    $('#zoom')._elm = zoomStack[zoomStack.length - 1];
   } else {
     $('#zoom').innerHTML = '';
   }
@@ -666,33 +678,26 @@ function zoomIn(wrapper, ruleName, inputSeg, clearMarks) {
   zoomStack.push({startRule: ruleName, input: inputSeg});
 
   $('#zoom').innerHTML = '';
-  var zoomElm = $('#zoom').appendChild(createElement('.zoomElm', UnicodeChars.BACK));
+  var zoomElm = $('#zoom');
+  zoomElm.textContent = UnicodeChars.BACK;
   zoomElm._elm = zoomStack[zoomStack.length - 1];
 
   zoomElm.addEventListener('click', function(e) {
     zoomPic = undefined;
-    $('#zoom').removeChild(zoomElm);
+    $('#zoom').hidden = true;
     zoomStack = [];
     clearMarks();
     refresh(100);
-    e.stopPropagation();
-    e.preventDefault();
   });
   zoomElm.addEventListener('mouseover', function(e) {
-    zoomPic = {
-      elm: zoomElm._elm
-    };
+    zoomPic = { elm: zoomElm._elm };
     clearMarks();
-    refresh(100);
-    e.stopPropagation();
-    e.preventDefault();
+    refresh();
   });
   zoomElm.addEventListener('mouseout', function(e) {
     zoomPic = undefined;
     clearMarks();
-    refresh(100);
-    e.stopPropagation();
-    e.preventDefault();
+    refresh();
   });
 }
 
@@ -856,7 +861,7 @@ function refreshParseTree(input, triggerRefresh) {
     if (trace.result.failed() || isZoomAt(input, grammar.defaultStartRule)) {
       zoomStack.pop();
       if (zoomStack.length > 0) {
-        $('#zoom').lastChild._elm = zoomStack[zoomStack.length - 1];
+        $('#zoom')._elm = zoomStack[zoomStack.length - 1];
         $('#zoom').hidden = true;
       }
       refreshParseTree(input, refresh);
