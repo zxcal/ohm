@@ -1,0 +1,97 @@
+#!/usr/bin/env node
+
+/* global Buffer, process */
+'use strict';
+
+var Server = require('node-static').Server;
+var http = require('http');
+var path = require('path');
+var fs = require('fs');
+
+var port = 8080;
+var grammarRoute = '/grammars/';
+var fileServer = new Server('.');
+
+var server = http.createServer(handleRequest);
+
+var grammars = {};
+
+function handleRequest(req, res) {
+  if (req.url === grammarRoute) {
+    // list all the grammars as JSON array
+    res.end(JSON.stringify(Object.keys(grammars), null, 2));
+    return;
+  } else if (req.url.indexOf(grammarRoute) === 0) {
+    var filename = req.url.slice(grammarRoute.length);
+    if (grammars.hasOwnProperty(filename)) {
+      if (req.method !== 'POST') {
+        // read the grammar
+        fileServer.serveFile('/' + grammars[filename], 200, {'Content-type': 'text/ohm-js'}, req, res);
+      } else {
+        // write the grammar
+        (function() {
+          var body = [];
+          req.on('data', function(chunk) {
+            body.push(chunk);
+          }).on('end', function() {
+            body = Buffer.concat(body);
+            fs.writeFile(grammars[filename], body);
+            res.statusCode = 200;
+            res.end();
+          });
+        })();
+      }
+      return;
+    }
+  }
+
+  // fallback to filesystem
+  req.addListener('end', function() {
+    fileServer.serve(req, res, function(err, result) {
+      if (err) {
+        console.error('Error serving %s - %s', req.url, err.message); // eslint-disable-line no-console
+        res.statusCode = err.status;
+        res.end(String(err.status));
+        return;
+      }
+      console.log('%s - %s', req.url, res.message); // eslint-disable-line no-console
+    });
+  }).resume();
+}
+
+function tryNextPort(err) {
+  if (err.code === 'EADDRINUSE' || err.code === 'EACCES') {
+    server.listen(++port);
+  }
+}
+
+function serve(args) {
+  var nextIsGrammar = false;
+
+  // Super basic command line option parsing.
+  for (var i = 0; i < args.length; ++i) {
+    if (args[i] === '-g') {
+      nextIsGrammar = true;
+    } else if (nextIsGrammar) {
+      grammars[path.basename(args[i])] = args[i];
+    } else if (args[i][0] === '-') {
+      nextIsGrammar = false;
+      console.log('Unknown option:', args[i]); // eslint-disable-line no-console
+    } else {
+      console.log('Unknown arg:', args[i]); // eslint-disable-line no-console
+    }
+  }
+
+  server.on('error', tryNextPort);
+  server.on('listening', function() {
+    server.removeListener('error', tryNextPort);
+    console.log('Ohm Visualizer is running at http://localhost:' + port + '/visualizer/'); // eslint-disable-line no-console
+  });
+  server.listen(port);
+
+  return grammars;
+}
+
+if (require.main === module) {
+  serve(process.argv.slice(2));
+}
