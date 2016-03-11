@@ -26,7 +26,7 @@ document.addEventListener('keydown', function(e) {
   if (tutorialTime) {
     clearTimeout(tutorialTime);
   }
-  
+
   if (e.keyCode === 90) {
     zoomKey = true;
     tutorialTime = setTimeout(function() {
@@ -35,7 +35,7 @@ document.addEventListener('keydown', function(e) {
         $('#bottomSection .overlay').textContent += '\nclick root or ↺ to zoom out';
       }
       showBottomOverlay();
-    }, 250);
+    }, 1000);
   } else if (e.keyCode !== 83 && e.metaKey && options.eval) {
     tutorialTime = setTimeout(function() {
       $('#bottomSection .overlay').textContent = 'select node to open, or close its editor';
@@ -641,20 +641,24 @@ function initSemantics() {
   });
 }
 
-function isZoomAt(input, ruleName) {
+function isZoomAt(traceNode) {
   if (zoomStack.length === 0) {
     return false;
   }
 
   var elm = zoomStack[zoomStack.length - 1];
-  return elm.input.trim() === input.trim() &&
-      elm.startRule === ruleName;
+  return elm.trace === traceNode ||
+  (elm.trace.interval.contents.trim() === traceNode.interval.contents.trim() &&
+    elm.trace.expr.ruleName === traceNode.expr.ruleName);
 }
 
-function zoomOut(wrapper, ruleName, inputSeg){
+function zoomOut(wrapper, traceNode){
   wrapper.classList.remove('zoom');
   wrapper.classList.remove('noBorder');
-  while (!isZoomAt(inputSeg, ruleName)) {
+  var label = wrapper.firstChild;
+  label.classList.remove('zoomOut');
+
+  while (!isZoomAt(traceNode)) {
     zoomStack.pop();
   }
   zoomStack.pop();
@@ -665,17 +669,12 @@ function zoomOut(wrapper, ruleName, inputSeg){
   }
 }
 
-function zoomIn(wrapper, ruleName, inputSeg, clearMarks) {
-  // console.log(inputSeg, ruleName);
-  var label = wrapper.firstChild;
-  if (!label.classList.contains('zoom')) {
+function zoomIn(wrapper, clearMarks, traceNode) {
+  if (isZoomAt(traceNode) || traceNode.result) {
     return;
   }
-
-  label.classList.remove('zoom');
   wrapper.classList.add('zoom');
-
-  zoomStack.push({startRule: ruleName, input: inputSeg});
+  zoomStack.push({trace: traceNode});
 
   $('#zoom').innerHTML = '';
   var zoomElm = $('#zoom');
@@ -701,29 +700,27 @@ function zoomIn(wrapper, ruleName, inputSeg, clearMarks) {
   });
 }
 
-function populateResult(input, startRule) {
-  var matchResult = grammar.match(input, startRule);
+function populateResult(traceNode) {
   resultMap = Object.create(null);
   if (!semantics.getOperation('eval')) {
     initSemantics();
   }
   try {
-    semantics(matchResult).eval();
+    semantics._getSemantics().wrap(traceNode.cst).eval();
   } catch (error) { }
 }
 
 function createTraceElement(traceNode, parent, input) {
   var pexpr = traceNode.expr;
   var ruleName = pexpr.ruleName;
-  var inputSeg = traceNode.interval.contents;
   if (options.eval && !resultMap) {
-    populateResult(inputSeg, ruleName);
+    populateResult(traceNode);
   }
 
   var wrapper = parent.appendChild(createElement('.pexpr'));
   wrapper.classList.add(pexpr.constructor.name.toLowerCase());
   wrapper.classList.toggle('failed', !traceNode.succeeded);
-  if (isZoomAt(inputSeg, ruleName)) {
+  if (isZoomAt(traceNode)) {
     if (input) {
       input.classList.add('highlight');
     }
@@ -795,12 +792,12 @@ function createTraceElement(traceNode, parent, input) {
       clearMarks();
     } else if (zoomKey) {
       if (wrapper.classList.contains('zoom')) {
-        zoomOut(wrapper, ruleName, inputSeg);
+        zoomOut(wrapper, traceNode);
       } else {
-        zoomIn(wrapper, ruleName, inputSeg, clearMarks);
+        zoomIn(wrapper, clearMarks, traceNode);
       }
       clearMarks();
-      refresh(100);
+      refresh();
     } else if (pexpr.constructor.name !== 'Prim') {
       toggleTraceElement(wrapper);
     }
@@ -812,27 +809,12 @@ function createTraceElement(traceNode, parent, input) {
   });
 
   label.addEventListener('mouseover', function(e) {
-    if (zoomKey) {
-      var result = grammar.match(inputSeg, ruleName);
-      if (isZoomAt(inputSeg, ruleName)) {
-        label.classList.add('zoomOut');
-      } else if (ruleName && result.succeeded() &&
-        !(inputSeg.trim() === inputEditor.getValue().trim() &&
-          ruleName === grammar.defaultStartRule)) {
-        label.classList.add('zoom');
-      } else {
-        label.classList.add('noZoom');
-      }
+    if (zoomKey && isZoomAt(traceNode)) {
+      label.classList.add('zoomOut');
     }
   });
 
   label.addEventListener('mouseout', function(e) {
-    if (label.classList.contains('zoom')) {
-      label.classList.remove('zoom');
-    }
-    if (label.classList.contains('noZoom')) {
-      label.classList.remove('noZoom');
-    }
     if (label.classList.contains('zoomOut')) {
       label.classList.remove('zoomOut');
     }
@@ -855,18 +837,7 @@ function refreshParseTree(input, triggerRefresh) {
   var trace;
   if (!zoomPic && zoomStack.length !== 0) {
     $('#zoom').hidden = false;
-    var start = zoomStack[zoomStack.length - 1];
-    trace = grammar.trace(start.input, start.startRule);
-
-    if (trace.result.failed() || isZoomAt(input, grammar.defaultStartRule)) {
-      zoomStack.pop();
-      if (zoomStack.length > 0) {
-        $('#zoom')._elm = zoomStack[zoomStack.length - 1];
-        $('#zoom').hidden = true;
-      }
-      refreshParseTree(input, refresh);
-      return;
-    }
+    trace = zoomStack[zoomStack.length - 1].trace;
   } else {
     $('#zoom').hidden = (zoomStack.length === 0);
 
