@@ -20,23 +20,78 @@ function initActionLog() {
   passThrough = undefined;
 }
 
-var refresh;
-var zoomKey = false, zoomStack = [], zoomPic;
-function initZoom() { // eslint-disable-line no-unused-vars
+
+var zoomKey = false, zoomStack = [], zoomPic, lastEdited;
+function init() { // eslint-disable-line no-unused-vars
   zoomKey = false;
   zoomStack = [];
   zoomPic = undefined;
+  lastEdited = undefined;
 }
 
+var refresh;
+var tutorialTime;
 document.addEventListener('keydown', function(e) {
+  if (tutorialTime) {
+    clearTimeout(tutorialTime);
+  }
+
   if (e.keyCode === 90) {
     zoomKey = true;
+    tutorialTime = setTimeout(function() {
+      $('#bottomSection .overlay').textContent = 'select node to zoom in';
+      if (zoomStack.length !== 0) {
+        $('#bottomSection .overlay').textContent += '\nclick root or ↺ to zoom out';
+      }
+      console.log('here');
+      showBottomOverlay();
+
+    }, 500);
+  } else if (e.keyCode !== 83 && e.metaKey && options.eval) {
+    tutorialTime = setTimeout(function() {
+      $('#bottomSection .overlay').textContent = 'select node to open, or close its editor';
+      showBottomOverlay();
+    }, 1000);
+  } else if (e.keyCode === 77) {
+    tutorialTime = setTimeout(function() {
+      if (!options.eval) {
+        $('#bottomSection .overlay').textContent = 'Press z to active zoom mode\n' +
+          'Check eval to evaluate the expression\n';
+      } else {
+        $('#bottomSection .overlay').textContent = 'Press z to active zoom mode\n' +
+          'Press command to toggle semantics editor\n';
+      }
+      showBottomOverlay();
+    }, 250);
+  } else {
+    $('#bottomSection .overlay').innerHTML = '';
+    hideBottomOverlay();
   }
 });
 document.addEventListener('keyup', function(e) {
+  $('#bottomSection .overlay').textContent = '';
+  hideBottomOverlay();
+  clearTimeout(tutorialTime);
+  tutorialTime = undefined;
   if (e.keyCode === 90) {
     zoomKey = false;
   }
+});
+document.addEventListener('mousemove', function(e) {
+  if (tutorialTime) {
+    $('#bottomSection .overlay').textContent = '';
+    hideBottomOverlay();
+    clearTimeout(tutorialTime);
+  }
+  tutorialTime = undefined;
+});
+document.addEventListener('click', function(e) {
+  if (tutorialTime) {
+    $('#bottomSection .overlay').textContent = '';
+    hideBottomOverlay();
+    clearTimeout(tutorialTime);
+  }
+  tutorialTime = undefined;
 });
 
 function Fail() { }
@@ -344,7 +399,8 @@ function getArgString(expr) {
   if (expr.constructor.name === 'Seq') {
     ans = expr.toArgString().split(',');
   } else {
-    ans.push(expr.toArgString());
+    var arg = expr.toArgString();
+    ans.push(arg.length === 0 ? '$1' : arg);
   }
   return ans;
 }
@@ -361,7 +417,7 @@ function getSemanticArgs(header, optArgs) {
   return ans;
 }
 
-function saveSemanticAction(traceNode, funcStr, actionType, actionName, exampleActionContainer) {
+function saveSemanticAction(traceNode, funcStr, actionType, actionName, exampleActionContainer, clearMarks) {
   var func;
   if (funcStr.trim().length !== 0) {
     var argStr = '(' + getSemanticArgs(exampleActionContainer.firstChild.firstChild,
@@ -371,7 +427,7 @@ function saveSemanticAction(traceNode, funcStr, actionType, actionName, exampleA
         '    var key = this.ctorName + "_from_" + \n' +
         '      this.interval.startIdx + "_to_" + \n' +
         '      this.interval.endIdx;\n' +
-        '    var ans = (() => { ' + funcStr + ' })();\n' +
+        '    var ans = (() => {' + funcStr + '})();\n' +
         '  } catch (error) {\n' +
         '    if (!todo) {\n' +
         '      if (!error.expression) {\n' +
@@ -395,10 +451,7 @@ function saveSemanticAction(traceNode, funcStr, actionType, actionName, exampleA
   }
   semantics['get' + actionType](actionName).actionDict[traceNode.expr.ruleName] = func;
 
-  // Trigger to refresh the parsing result
-  grammarEditor.getWrapperElement().classList.remove('highlighting');
-  inputEditor.getWrapperElement().classList.remove('highlighting');
-
+  clearMarks();
   refresh(100);
   // restoreEditorState(inputEditor, 'input', $('#sampleInput'));
 }
@@ -416,6 +469,9 @@ function loadHeader(traceNode, header, optArgStr) {
     var nameEditor = arg.appendChild(createElement('textarea.represent'));
     if (!optArgStr || optArgStr[idx] === defaultArgStrs[idx]) {
       nameEditor.hidden = true;
+      if (defaultArgStrs[idx] !== display) {
+        nameEditor.value = defaultArgStrs[idx];
+      }
     } else {
       nameEditor.value = optArgStr[idx];
     }
@@ -461,6 +517,10 @@ function retrieveFunc(ruleName) {
 
 function appendSemanticEditor(wrapper, traceNode, clearMarks) {
   var ruleName = traceNode.expr.ruleName;
+  var key = ruleName + '_from_' +
+    traceNode.interval.trimmed().startIdx + '_to_' +
+    traceNode.interval.trimmed().endIdx;
+
   var exampleActionContainer = wrapper.appendChild(createElement('.exampleActionContainer'));
   var editorWrap = exampleActionContainer.appendChild(createElement('.editor'));
 
@@ -474,8 +534,9 @@ function appendSemanticEditor(wrapper, traceNode, clearMarks) {
     'Cmd-S': function(cm) {
       clearMarks();
       try {
+        lastEdited = {key: key};
         // TODO: need to be modified, action type and action name
-        saveSemanticAction(traceNode, cm.getValue(), 'Operation', 'eval', exampleActionContainer);
+        saveSemanticAction(traceNode, cm.getValue(), 'Operation', 'eval', exampleActionContainer, clearMarks);
       } catch (error) {
         editorWrap.nextElementSibling.className = 'semanticResult error';
         editorWrap.nextElementSibling.textContent = error.message;
@@ -488,11 +549,20 @@ function appendSemanticEditor(wrapper, traceNode, clearMarks) {
   loadHeader(traceNode, header, funcObj.args);
 
   // Add semantic action result
-  var key = ruleName + '_from_' +
-    traceNode.interval.trimmed().startIdx + '_to_' +
-    traceNode.interval.trimmed().endIdx;
   var res = resultMap[key];
   var resultContainer = exampleActionContainer.appendChild(createElement('.semanticResult'));
+  var saveButton = exampleActionContainer.appendChild(createElement('button.saveAction', 'save'));
+  saveButton.addEventListener('click', function(e) {
+    clearMarks();
+    try {
+      lastEdited = {key: key};
+      // TODO: need to be modified, action type and action name
+      saveSemanticAction(traceNode, semanticEditor.getValue(), 'Operation', 'eval', exampleActionContainer, clearMarks);
+    } catch (error) {
+      editorWrap.nextElementSibling.className = 'semanticResult error';
+      editorWrap.nextElementSibling.textContent = error.message;
+    }
+  });
   if (res instanceof Error) {
     resultContainer.classList.add('error');
     resultContainer.textContent = res.message;
@@ -505,6 +575,9 @@ function appendSemanticEditor(wrapper, traceNode, clearMarks) {
       wrapper.children[0].classList.add('mark');
     }
   } else {
+    if (lastEdited && lastEdited.key === key) {
+      lastEdited = undefined;
+    }
     resultContainer.textContent = res;
   }
 
@@ -521,7 +594,14 @@ function appendSemanticEditor(wrapper, traceNode, clearMarks) {
     resultContainer.classList.add('hidden');
     resultContainer.hidden = true;
   }
-  exampleActionContainer.classList.add('hidden');
+
+  if (!lastEdited || lastEdited.key !== key ||
+    !wrapper.children[0].classList.contains('mark')) {
+    exampleActionContainer.classList.add('hidden');
+    // saveButton.hidden = true;
+  } else if (resultContainer.hidden){
+    resultContainer.hidden = false;
+  }
 }
 
 function initSemantics() {
@@ -592,93 +672,92 @@ function initSemantics() {
   });
 }
 
-function isZoomAt(input, ruleName) {
-  if (zoomStack.length === 0) {
+function isZoomAt(traceNode) {
+  if (zoomStack.length === 1) {
     return false;
   }
 
   var elm = zoomStack[zoomStack.length - 1];
-  return elm.input.trim() === input.trim() &&
-      elm.startRule === ruleName;
+  return elm.trace === traceNode;
+  // if (elm.trace === traceNode) {
+  //   return true;
+  // }
+  // if (elm.trace.interval.contents.trim() === traceNode.interval.contents.trim() &&
+  //   elm.trace.expr.ruleName === traceNode.expr.ruleName) {
+  //   elm.trace = traceNode;
+  //   return true;
+  // }
+  // return false;
 }
 
-function zoomOut(wrapper, ruleName, inputSeg){
+function zoomOut(wrapper, traceNode){
   wrapper.classList.remove('zoom');
   wrapper.classList.remove('noBorder');
-  while (!isZoomAt(inputSeg, ruleName)) {
+  var label = wrapper.firstChild;
+  label.classList.remove('zoomOut');
+
+  while (!isZoomAt(traceNode)) {
     zoomStack.pop();
   }
   zoomStack.pop();
   if (zoomStack.length > 0) {
-    $('#zoom').lastChild._elm = zoomStack[zoomStack.length - 1];
+    $('#zoom')._elm = zoomStack[zoomStack.length - 1];
   } else {
     $('#zoom').innerHTML = '';
   }
 }
 
-function zoomIn(wrapper, ruleName, inputSeg, clearMarks) {
-  // console.log(inputSeg, ruleName);
-  if (!ruleName || isZoomAt(inputSeg, ruleName)) {
+function zoomIn(wrapper, clearMarks, traceNode) {
+  if (isZoomAt(traceNode) || traceNode.result) {
     return;
   }
-
   wrapper.classList.add('zoom');
-  zoomStack.push({startRule: ruleName, input: inputSeg});
+  zoomStack.push({trace: traceNode});
 
-  $('#zoom').innerHTML = '';
-  var zoomElm = $('#zoom').appendChild(createElement('.zoomElm', UnicodeChars.BACK));
+  var zoomElm = $('#zoom');
+  zoomElm.textContent = UnicodeChars.BACK;
   zoomElm._elm = zoomStack[zoomStack.length - 1];
 
   zoomElm.addEventListener('click', function(e) {
     zoomPic = undefined;
-    $('#zoom').removeChild(zoomElm);
+    $('#zoom').hidden = true;
     zoomStack = [];
     clearMarks();
     refresh(100);
-    e.stopPropagation();
-    e.preventDefault();
   });
   zoomElm.addEventListener('mouseover', function(e) {
-    zoomPic = {
-      elm: zoomElm._elm
-    };
+    zoomPic = { elm: zoomElm._elm };
     clearMarks();
-    refresh(100);
-    e.stopPropagation();
-    e.preventDefault();
+    refresh();
   });
   zoomElm.addEventListener('mouseout', function(e) {
     zoomPic = undefined;
     clearMarks();
-    refresh(100);
-    e.stopPropagation();
-    e.preventDefault();
+    refresh();
   });
 }
 
-function populateResult(input, startRule) {
-  var matchResult = grammar.match(input, startRule);
+function populateResult(traceNode) {
   resultMap = Object.create(null);
   if (!semantics.getOperation('eval')) {
     initSemantics();
   }
   try {
-    semantics(matchResult).eval();
+    semantics._getSemantics().wrap(traceNode.cstNode).eval();
   } catch (error) { }
 }
 
 function createTraceElement(traceNode, parent, input) {
   var pexpr = traceNode.expr;
   var ruleName = pexpr.ruleName;
-  var inputSeg = traceNode.interval.contents;
   if (options.eval && !resultMap) {
-    populateResult(inputSeg, ruleName);
+    populateResult(traceNode);
   }
 
   var wrapper = parent.appendChild(createElement('.pexpr'));
   wrapper.classList.add(pexpr.constructor.name.toLowerCase());
   wrapper.classList.toggle('failed', !traceNode.succeeded);
-  if (isZoomAt(inputSeg, ruleName)) {
+  if (isZoomAt(traceNode)) {
     if (input) {
       input.classList.add('highlight');
     }
@@ -750,12 +829,12 @@ function createTraceElement(traceNode, parent, input) {
       clearMarks();
     } else if (zoomKey) {
       if (wrapper.classList.contains('zoom')) {
-        zoomOut(wrapper, ruleName, inputSeg);
+        zoomOut(wrapper, traceNode);
       } else {
-        zoomIn(wrapper, ruleName, inputSeg, clearMarks);
+        zoomIn(wrapper, clearMarks, traceNode);
       }
       clearMarks();
-      refresh(100);
+      refresh();
     } else if (pexpr.constructor.name !== 'Prim') {
       toggleTraceElement(wrapper);
     }
@@ -764,6 +843,18 @@ function createTraceElement(traceNode, parent, input) {
     }
     e.stopPropagation();
     e.preventDefault();
+  });
+
+  label.addEventListener('mouseover', function(e) {
+    if (zoomKey && isZoomAt(traceNode)) {
+      label.classList.add('zoomOut');
+    }
+  });
+
+  label.addEventListener('mouseout', function(e) {
+    if (label.classList.contains('zoomOut')) {
+      label.classList.remove('zoomOut');
+    }
   });
 
   // Append semantic editor to the node
@@ -781,23 +872,7 @@ function refreshParseTree(input, triggerRefresh) {
   refresh = triggerRefresh;
 
   var trace;
-  if (!zoomPic && zoomStack.length !== 0) {
-    $('#zoom').hidden = false;
-    var start = zoomStack[zoomStack.length - 1];
-    trace = grammar.trace(start.input, start.startRule);
-
-    if (trace.result.failed() || isZoomAt(input, grammar.defaultStartRule)) {
-      zoomStack.pop();
-      if (zoomStack.length > 0) {
-        $('#zoom').lastChild._elm = zoomStack[zoomStack.length - 1];
-        $('#zoom').hidden = true;
-      }
-      refreshParseTree(input, refresh);
-      return;
-    }
-  } else {
-    $('#zoom').hidden = (zoomStack.length === 0);
-
+  if (zoomStack.length === 0) {
     trace = grammar.trace(input);
     if (trace.result.failed()) {
       // Intervals with start == end won't show up in CodeMirror.
@@ -805,6 +880,13 @@ function refreshParseTree(input, triggerRefresh) {
       interval.endIdx += 1;
       setError('input', inputEditor, interval, 'Expected ' + trace.result.getExpectedText());
     }
+    zoomStack.push({trace: trace});
+  }
+  $('#zoom').hidden = (zoomStack.length <= 1);
+  if (!zoomPic && zoomStack.length > 1) {
+    trace = zoomStack[zoomStack.length - 1].trace;
+  } else {
+    trace = zoomStack[0].trace;
   }
 
 

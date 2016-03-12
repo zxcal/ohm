@@ -49,12 +49,6 @@
       overflow: hidden;
       white-space: nowrap;
     }
-    .pexpr.zoom {
-      border: 2px solid blue;
-    }
-    .pexpr.zoom.noBorder {
-      border: 0px;
-    }
     .pexpr + .pexpr {
       margin-left: 2px;
     }
@@ -132,6 +126,15 @@
       border-bottom: 1px solid #9E9E9E;
       margin-bottom: 0px;
     }
+    .pexpr > .label.zoomOut{
+      border-top: 2px solid blue;
+    }
+    .pexpr.zoom {
+      border: 2px solid blue;
+    }
+    .pexpr.zoom.noBorder {
+      border: 0;
+    }
     .pexpr > .children {
       display: flex;
       flex-direction: row;
@@ -170,20 +173,19 @@
     }
 
     #zoom {
-      margin-top: 8px;
-      margin-left: 50px;
-      position: fixed;
-      right: 20px;
+      background-color: white;
+      border: 0;
+      padding: 3px;
+      margin-top: 5px;
+      margin-right: 10px;
+      float: left;
+      left: 20px;
       cursor: pointer;
-    }
-    #zoom .zoomElm {
-      margin-top: 2px;
-      margin-bottom: 2px;
-      font-size: 25px;
+      font-size: 18px;
       color: black;
       text-align: center;
     }
-    #zoom .zoomElm:hover {
+    #zoom:hover {
       font-weight: bold;
     }
 
@@ -244,10 +246,16 @@
       background-color: white;
       height: 100%;
       left: 0;
-      opacity: 0.4;
+      opacity: 0.6;
       position: absolute;
       top: 0;
       width: 0;
+      vertical-align: middle;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      font: small-caps bolder 16px/3;
+      white-space: pre;
     }
 
     #grammarContainer,
@@ -304,7 +312,27 @@
       font-family: Menlo, Monaco, sans-serif;
       font-size: 12px;
     }
-    .exampleActionContainer.hidden .editor{
+    button.saveAction {
+      background-color: #FBFBFB;
+      color: #030303;
+      border-radius: 100px;
+      -moz-border-radius: 100px;
+      -webkit-border-radius: 100px;
+      border: 1px solid hsla(216,89%,62%,.5);
+      cursor: pointer;
+      box-shadow: 0 1px 0 rgba(255, 255, 255, 0.5) inset;
+      -moz-box-shadow: 0 1px 0 rgba(255, 255, 255, 0.5) inset;
+      -webkit-box-shadow: 0 1px 0 rgba(255, 255, 255, 0.5) inset;
+      outline: none;
+      margin-bottom: 5px;
+      margin-top: -1px;
+      width: 100%;
+    }
+    button.saveAction:hover {
+      text-decoration: underline;;
+    }
+    .exampleActionContainer.hidden .editor,
+    .exampleActionContainer.hidden button.saveAction{
       display: none;
     }
     .exampleActionContainer .semanticResult {
@@ -314,7 +342,6 @@
       text-align: center;
       color: #4CAF50;
       height: 13px;
-      margin-bottom: 5px;
       margin-top: -1px;
     }
     .exampleActionContainer .semanticResult.error {
@@ -473,12 +500,12 @@
   </div>
   <div id="mainSplitter" class="splitter"></div>
   <div id="bottomSection">
+    <button id="zoom" type="button" hidden></button>
     <div id="visualizerBody">
       <div id="expandedInput"></div>
       <div id="parseResults"></div>
       <div class="overlay"></div>
     </div>
-    <div id="zoom" hidden></div>
   </div>
   <div id="dragOverlay"></div>
   <div id="options">
@@ -487,7 +514,7 @@
   </div>
 
   
-<!--   <div id="semanticSelecter">
+  <!-- <div id="semanticSelecter">
     <input type='text' list='operation'>
     <button>+</button>
     <input type='text' list='attribute'>
@@ -551,6 +578,7 @@ number  (a number)
 
   <script src="../dist/ohm.js"></script>
   <script src="third_party/d3.min.js"></script>
+  <script src="third_party/keymaster.js"></script>
   <script src="third_party/codemirror-5.11/lib/codemirror.js"></script>
   <script src="third_party/codemirror-5.11/addon/search/search.js"></script>
   <script src="third_party/codemirror-5.11/addon/search/searchcursor.js"></script>

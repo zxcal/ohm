@@ -1,5 +1,5 @@
 /* eslint-env browser */
-/* global cmUtil, CodeMirror, ohm, refreshParseTree, searchBar, updateExternalRules, initZoom */
+/* global cmUtil, CodeMirror, ohm, refreshParseTree, searchBar, updateExternalRules, init */
 
 'use strict';
 
@@ -140,11 +140,11 @@ function parseGrammar(source) {
   restoreEditorState(inputEditor, 'input', $('#sampleInput'));
   restoreEditorState(grammarEditor, 'grammar', $('#sampleGrammar'));
 
-  inputEditor.on('change', function() { initZoom(); triggerRefresh(250); });
+  inputEditor.on('change', function() { init(); triggerRefresh(250); });
   grammarEditor.on('change', function() {
     grammarChanged = true;
     hideError('grammar', grammarEditor);
-    initZoom();
+    init();
     triggerRefresh(250);
   });
 
