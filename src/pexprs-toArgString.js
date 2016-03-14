@@ -74,7 +74,7 @@ pexprs.Seq.prototype.toArgString = function() {
 
 pexprs.Iter.prototype.toArgString = function() {
   var str = this.expr.toArgString();
-  str = str.length === 0 ? 'Iter' : str;
+  str = str.length === 0 ? 'Iter' : str.split(',').join('_');
   switch (this.operator) {
     case '*':
     case '+':
@@ -84,11 +84,11 @@ pexprs.Iter.prototype.toArgString = function() {
 };
 
 pexprs.Not.prototype.toArgString = function() {
-  return 'not_' + this.expr.toArgString();
+  return 'not_' + this.expr.toArgString().split(',').join('_');
 };
 
 pexprs.Lookahead.prototype.toArgString = function() {
-  return 'has' + this.expr.toArgString();
+  return 'has' + this.expr.toArgString().split(',').join('_');
 };
 
 pexprs.Arr.prototype.toArgString = function() {

@@ -43,9 +43,7 @@ document.addEventListener('keydown', function(e) {
       if (zoomStack.length !== 0) {
         $('#bottomSection .overlay').textContent += '\nclick root or ↺ to zoom out';
       }
-      console.log('here');
       showBottomOverlay();
-
     }, 500);
   } else if (e.keyCode !== 83 && e.metaKey && options.eval) {
     tutorialTime = setTimeout(function() {
