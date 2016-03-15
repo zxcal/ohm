@@ -28,7 +28,6 @@
   }
 
   var initElm;
-  var operationInfo = Object.create(null);
   var refresh;
   var tutorialTime;
   document.addEventListener('keydown', function(e) {
@@ -45,14 +44,14 @@
         }
         showBottomOverlay();
       }, 500);
-    } else if (e.keyCode !== 83 && e.metaKey && operationInfo.operation) {
+    } else if (e.keyCode !== 83 && e.metaKey && initElm.operation) {
       tutorialTime = setTimeout(function() {
         $('#bottomSection .overlay').textContent = 'select node to open, or close its editor';
         showBottomOverlay();
       }, 1000);
     } else if (e.keyCode === 77) {
       tutorialTime = setTimeout(function() {
-        if (!operationInfo.operation) {
+        if (!initElm.operation) {
           $('#bottomSection .overlay').textContent = 'Press z to active zoom mode\n' +
             'Check eval to evaluate the expression\n';
         } else {
@@ -431,7 +430,7 @@
           '    var key = this.ctorName + "_from_" + \n' +
           '      this.interval.startIdx + "_to_" + \n' +
           '      this.interval.endIdx;\n' +
-          '    var ans = (() => { return eval("' + funcStr.replace('\n', '\\n') + '")})();\n' +
+          '    var ans = eval("' + funcStr.replace('\n', '\\n') + '");\n' +
           '  } catch (error) {\n' +
           '    if (!todo) {\n' +
           '      if (!error.expression) {\n' +
@@ -457,10 +456,10 @@
       console.log('function' + argStr + funcStr);  // eslint-disable-line no-console
       func = eval('(function' + argStr + funcStr + ')'); // eslint-disable-line no-eval
     }
-    semantics.getOperation(operationInfo.operation).actionDict[traceNode.expr.ruleName] = func;
+    semantics.getOperation(initElm.operation.value).actionDict[traceNode.expr.ruleName] = func;
 
     clearMarks();
-    refresh(100);
+    refresh(250);
     // restoreEditorState(inputEditor, 'input', $('#sampleInput'));
   }
 
@@ -502,7 +501,7 @@
     var funcObj = Object.create(null);
 
     // TODO: ['get'+actionType](actionName)
-    var actionFn = semantics.getOperation(operationInfo.operation).actionDict[ruleName];
+    var actionFn = semantics.getOperation(initElm.operation.value).actionDict[ruleName];
     if (actionFn) {
       var actionFnStr = actionFn.toString();
       funcObj.args = [];
@@ -511,12 +510,12 @@
           funcObj.args.push(arg.trim());
         });
 
-      var startIdx = actionFnStr.indexOf('var ans = (() => { return eval("') + 32;
-      var nextIdx = actionFnStr.indexOf('")})();', startIdx);
+      var startIdx = actionFnStr.indexOf('var ans = eval("') + 16;
+      var nextIdx = actionFnStr.indexOf('");', startIdx);
       var endIdx;
       while (nextIdx >= 0) {
         endIdx = nextIdx;
-        nextIdx = actionFnStr.indexOf('")})();', nextIdx + 7);
+        nextIdx = actionFnStr.indexOf('");', nextIdx + 3);
       }
 
       funcObj.body = actionFnStr.substring(startIdx, endIdx).replace('\\n', '\n');
@@ -589,7 +588,7 @@
       if (initElm.lastEdited === key) {
         initElm.lastEdited = undefined;
       }
-      resultContainer.textContent = JSON.stringify(res);
+      resultContainer.innerHTML = JSON.stringify(res);
     }
 
     // The result comes from `_nonterminal`
@@ -728,8 +727,8 @@
   function createTraceElement(ui, grammar, traceNode, parent, input) {
     var pexpr = traceNode.expr;
     var ruleName = pexpr.ruleName;
-    if (operationInfo.operation && !resultMap) {
-      populateResult(traceNode, operationInfo.operation);
+    if (initElm.operation && !resultMap) {
+      populateResult(traceNode, initElm.operation.value);
     }
 
     var wrapper = parent.appendChild(createElement('.pexpr'));
@@ -811,7 +810,7 @@
     label.addEventListener('click', function(e) {
       if (e.altKey && !(e.shiftKey || e.metaKey)) {
         console.log(traceNode);  // eslint-disable-line no-console
-      } else if (e.metaKey && !e.shiftKey && operationInfo.operation) {
+      } else if (e.metaKey && !e.shiftKey && initElm.operation) {
         toggleSemanticEditor(wrapper); // cmd + click to open or close semantic editor
         clearMarks();
       } else if (initElm.zoomKey) {
@@ -845,8 +844,7 @@
     });
 
     // Append semantic editor to the node
-    if (operationInfo.operation &&
-      traceNode.succeeded &&
+    if (initElm.operation && traceNode.succeeded &&
       ruleName && ruleName !== 'spaces') {
       appendSemanticEditor(wrapper, traceNode, clearMarks);
     }
@@ -877,7 +875,10 @@
   });
 
   var addOpButton = $('#addOperation');
-  $('#addOperation').addEventListener('click', function(e) {
+  addOpButton.addEventListener('click', function(e) {
+    if (addOpButton.previousSibling && addOpButton.previousSibling.value === '') {
+      return;
+    }
     var newOp = createElement('textarea.op');
     newOp.placeholder = 'New Operation';
     newOp.cols = ('New Operation').length;
@@ -888,12 +889,10 @@
       if (event.keyCode === 13) {
         if (newOp.value) {
           try {
+            initSemantics(newOp.value);
             newOp.readOnly = true;
-
-            operationInfo.operation = newOp.value;
-            operationInfo.node = newOp;
-            // initSemantics(newOp.value);
-            refresh(100);
+            initElm.operation = newOp;
+            refresh(250);
           } catch (error) {
             window.alert(error); // eslint-disable-line no-alert
             newOp.select();
@@ -903,12 +902,17 @@
       }
     });
     newOp.addEventListener('click', function(e) {
-      if (operationInfo.node) {
-        operationInfo.node.classList.remove('selected');
+      if (initElm.operation === newOp) {
+        return;
       }
-      operationInfo.operation = newOp.value;
-      operationInfo.node = newOp;
+      if (initElm.operation) {
+        initElm.operation.classList.remove('selected');
+      }
+      initElm.operation = newOp;
       newOp.classList.add('selected');
+      if (newOp.value) {
+        refresh(250);
+      }
     });
     $('#operations').insertBefore(newOp, addOpButton);
   });
