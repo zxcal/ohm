@@ -1,9 +1,11 @@
 /* eslint-env browser */
-/* global cmUtil, CodeMirror, ohm, refreshParseTree, searchBar, updateExternalRules, init */
+/* global cmUtil, CodeMirror, ohm, refreshParseTree, searchBar, init */
+/* global updateExternalRules, updateRuleHyperlinks */
 
 'use strict';
 
 function $(sel) { return document.querySelector(sel); }
+function $$(sel) { return Array.prototype.slice.call(document.querySelectorAll(sel)); }
 var options = {};
 
 var inputEditor = CodeMirror($('#inputContainer .editorWrapper'));
@@ -12,24 +14,24 @@ var grammarEditor = CodeMirror($('#grammarContainer .editorWrapper'));
 // Expose the grammar globally so that it can easily be accessed from the console.
 var grammar = null;
 var semantics = null; // eslint-disable-line no-unused-vars
+var initElement = {
+  zoomKey: false,
+  zoomStack: [],
+  zoomPic: undefined,
+  lastEdited: undefined
+};
+
+function init() { // eslint-disable-line no-unused-vars
+  initElement = {
+    zoomKey: false,
+    zoomStack: [],
+    zoomPic: undefined,
+    lastEdited: undefined
+  };
+}
 
 // Misc Helpers
 // ------------
-
-function createElement(sel, optContent) {
-  var parts = sel.split('.');
-  var tagName = parts[0];
-  if (tagName.length === 0) {
-    tagName = 'div';
-  }
-
-  var el = document.createElement(tagName);
-  el.className = parts.slice(1).join(' ');
-  if (optContent) {
-    el.textContent = optContent;
-  }
-  return el;
-}
 
 var errorMarks = {
   grammar: null,
@@ -59,7 +61,9 @@ function setError(category, editor, interval, message) {
 }
 
 function showError(category, editor, interval, message) {
-  var errorEl = createElement('.error', message);
+  var errorEl = document.createElement('div');
+  errorEl.className = 'error';
+  errorEl.textContent = message;
   var line = editor.posFromIndex(interval.endIdx).line;
   errorMarks[category].widget = editor.addLineWidget(line, errorEl, {insertAt: 0});
 }
@@ -126,6 +130,11 @@ function parseGrammar(source) {
   searchBar.initializeForEditor(inputEditor);
   searchBar.initializeForEditor(grammarEditor);
 
+  var ui = {
+    grammarEditor: grammarEditor,
+    inputEditor: inputEditor
+  };
+
   function triggerRefresh(delay) {
     showBottomOverlay();
     if (refreshTimeout) {
@@ -140,7 +149,10 @@ function parseGrammar(source) {
   restoreEditorState(inputEditor, 'input', $('#sampleInput'));
   restoreEditorState(grammarEditor, 'grammar', $('#sampleGrammar'));
 
-  inputEditor.on('change', function() { init(); triggerRefresh(250); });
+  inputEditor.on('change', function() {
+    init();
+    triggerRefresh(250);
+  });
   grammarEditor.on('change', function() {
     grammarChanged = true;
     hideError('grammar', grammarEditor);
@@ -165,7 +177,7 @@ function parseGrammar(source) {
       var result = parseGrammar(grammarEditor.getValue());
       grammar = result.grammar;
       updateExternalRules(grammarEditor, result.matchResult, grammar);
-
+      updateRuleHyperlinks(grammarEditor, result.matchResult, grammar);
       if (result.error) {
         var err = result.error;
         setError('grammar', grammarEditor, err.interval, err.shortMessage || err.message);
@@ -175,10 +187,20 @@ function parseGrammar(source) {
     }
 
     if (grammar && grammar.defaultStartRule) {
+      // TODO: Move this stuff to parseTree.js. We probably want a proper event system,
+      // with events like 'beforeGrammarParse' and 'afterGrammarParse'.
       hideBottomOverlay();
       $('#expandedInput').innerHTML = '';
       $('#parseResults').innerHTML = '';
-      refreshParseTree(inputEditor.getValue(), triggerRefresh);
+
+      var trace = grammar.trace(inputEditor.getValue());
+      if (trace.result.failed()) {
+        // Intervals with start == end won't show up in CodeMirror.
+        var interval = trace.result.getInterval();
+        interval.endIdx += 1;
+        setError('input', inputEditor, interval, 'Expected ' + trace.result.getExpectedText());
+      }
+      refreshParseTree(ui, grammar, initElement, triggerRefresh, trace, options.showFailures);
     }
   }
 
@@ -191,4 +213,8 @@ function parseGrammar(source) {
   /* eslint-enable no-console */
 
   refresh();
+
+  $$('.hiddenDuringLoading').forEach(function(el) {
+    el.classList.remove('hiddenDuringLoading');
+  });
 })();

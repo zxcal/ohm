@@ -26,17 +26,20 @@
       /* Must be less than the .splitter z-index, but greater than everything in codemirror.css. */
       z-index: 9;
     }
+    #expandedInputWrapper {
+      border-bottom: 1px solid #ddd;
+    }
     #expandedInput {
-      box-sizing: border-box;
       font-size: 100%;
-      margin-bottom: 1px;
       outline: none;
-      padding: 8px 0 8px 0;
+      padding: 8px 0;
     }
     #expandedInput .highlight {
       background-color: #B5D5FF;
     }
-    #bottomSection {
+    #parseResults {
+      flex: 1;
+      overflow: auto;
       padding: 2px;
     }
     .pexpr {
@@ -153,6 +156,12 @@
       color: white;
     }
 
+    textarea {
+      height: 12px;
+      resize: none;
+      outline: none;
+    }
+
     #semanticSelecter {
       position: fixed;
       bottom: 20px;
@@ -192,7 +201,44 @@
     #visualizerBody {
       float: left;
     }
+
+    #operations {
+      background-color: white;
+      color: black;
+      font-family: Menlo, Monaco, sans-serif;
+      font-style: normal;
+      border-radius: 3px;
+      padding: 2px 6px 1px 6px;
+      position: fixed;
+      bottom: 20px;
+      right: 20px;
+    }
+    textarea.op {
+      padding-top: 1px;
+      padding-bottom: 1px;
+      margin-bottom: 4px;
+      height: 16px;
+      border: 1px solid #555;
+      border-radius: 10px;
+      display:block;
+      clear:both;
+      float: right;
+      text-align: center;
+    }
+    textarea.op[readOnly] {
+      cursor: pointer;
+    }
+    textarea.op.selected {
+      border-color: #83BFFC;
+      border-width: 2px;
+    }
+    #addOperation {
+      float: right;
+      clear: both;
+    }
+
     #options {
+      display: none;
       background-color: white;
       color: black;
       font-family: Menlo, Monaco, sans-serif;
@@ -218,7 +264,6 @@
     #expandedInput, #expandedInput span {
       display: inline-block;
       text-align: center;
-      white-space: pre;
     }
     #measuringDiv {
       height: auto;
@@ -238,7 +283,7 @@
 
     #bottomSection {
       flex: 1;
-      overflow: auto;
+      flex-direction: column;
       position: relative;
     }
 
@@ -291,14 +336,12 @@
       color: rgb(123, 123, 123);
       float: left;
     }
+
     textarea.represent {
       margin-top: 8px;
-      height: 12px;
-      resize: none;
       font: italic 12px Menlo, Monaco, sans-serif;
       color:  #FF8D00;
       border: white;
-      outline: none;
     }
     .exampleActionContainer .editorBody {
       margin-top: 3px;
@@ -385,6 +428,10 @@
       padding: 12px;
     }
 
+    .CodeMirror div {
+      background-color: rgba(238, 0, 170, 0);
+      transition: background-color .25s ease-in-out;
+    }
     .CodeMirror .active-definition {
       background-color: rgba(238, 0, 170, 0.1);
     }
@@ -478,6 +525,13 @@
       border-top: 1px solid #eee;
       padding-top: 14px;
     }
+    .hiddenDuringLoading {
+      display: none;
+    }
+    #loadGrammar,
+    #saveGrammar {
+      display: none;
+    }
   </style>
 </head>
 <body>
@@ -508,9 +562,14 @@
     </div>
   </div>
   <div id="dragOverlay"></div>
+  <div id="operations">
+    <button id="addOperation">Add Operation</button>
+  </div>
   <div id="options">
     <!-- <label><input type="checkbox" name="showFailures"> Show failures</label> -->
     <label><input type="checkbox" name="eval">eval</label>
+    <button id="loadGrammar">Load ...</button>
+    <button id="saveGrammar">Save ...</button>
   </div>
 
   
@@ -585,7 +644,9 @@ number  (a number)
   <script src="cmUtil.js"></script>
   <script src="parseTree.js"></script>
   <script src="externalRules.js"></script>
+  <script src="ruleHyperlinks.js"></script>
   <script src="searchBar.js"></script>
+  <script src="persistence.js"></script>
   <script src="index.js"></script>
 </body>
 </html>

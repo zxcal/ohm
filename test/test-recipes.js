@@ -6,6 +6,7 @@
 
 var ohm = require('..');
 var test = require('tape-catch');
+var testUtil = require('./testUtil');
 
 // --------------------------------------------------------------------
 // Helpers
@@ -56,13 +57,60 @@ test('recipes with supergrammars', function(t) {
 });
 
 test('recipes involving parameterized rules', function(t) {
-  var g = ohm.grammar(
-      'G {\n' +
-      '  foo = bar<"0", "1">\n' +
-      '  bar<x, y> = "a" x -- one\n' +
-      '            | "b" y -- two\n' +
-      '}');
-  t.ok(toGrammar(g.toRecipe()).match('a0').succeeded());
-  t.ok(toGrammar(g.toRecipe()).match('b1').succeeded());
+  var g = testUtil.makeGrammar([
+    'G {',
+    '  foo = bar<"0", "1">',
+    '  bar<x, y> = "a" x -- one',
+    '            | "b" y -- two',
+    '}'
+  ]);
+  var recipe = g.toRecipe();
+  t.ok(toGrammar(recipe).match('a0').succeeded(), 'matches one paramater');
+  t.ok(toGrammar(recipe).match('b1').succeeded(), 'matches multiple parameters');
+  t.ok(toGrammar(recipe).match('a2').failed(), 'parameters shadow global rules');
+  // .define("bar", ["x", "y"], this.alt(this.app("bar_one", [this.param(0), this.param(1)]), ...
+  //   INSTEAD OF
+  // .define("bar", ["x", "y"], this.alt(this.app("bar_one", [this.app("x"), this.app("y")]), ...
+  t.ok(recipe.match(/define\("bar".*\[this.param/), 'forwards parameters instead of applications');
+  t.end();
+});
+
+test('recipes with source', function(t) {
+  var ns = testUtil.makeGrammars([
+    ' G {',  // Deliberately start with leading space.
+    '  Start = ident*',
+    '  ident = letter /* foo */ identPart*',
+    '  identPart = alnum',
+    '}',
+    ' G2 <: G {',
+    '  Start := (ident | number)*',
+    '  identPart += "$"',
+    '  number = digit+',
+    '}'
+  ]);
+  var g = toGrammar(ns.G.toRecipe());
+  t.equal(g.ruleBodies.Start.interval.contents, 'ident*');
+  t.equal(g.ruleBodies.ident.interval.contents, 'letter /* foo */ identPart*');
+
+  // Try re-parsing the grammar based on the source retained in the recipe.
+  var reconsitutedGrammar = ohm.grammar(g.definitionInterval.contents);
+  t.equal(reconsitutedGrammar.toRecipe(), ns.G.toRecipe());
+
+  var g2 = toGrammar(ns.G2.toRecipe());
+  t.equal(g2.ruleBodies.Start.interval.contents, '(ident | number)*', 'overridden rule');
+
+  t.equal(g2.ruleBodies.identPart.interval.contents, '"$"', 'extended rule');
+  reconsitutedGrammar = ohm.grammar(g2.definitionInterval.contents, {G: ns.G});
+  t.equal(reconsitutedGrammar.toRecipe(), ns.G2.toRecipe());
+
+  // Check that recipes without source still work fine.
+  g = ohm.makeRecipe(function() {
+    return new this.newGrammar('G')  // eslint-disable-line new-cap
+        .define('start', [], this.app('any')).build();
+  });
+  t.equal(g.definitionInterval, undefined, 'grammar definitionInterval is undefined');
+  t.equal(g.ruleBodies.start.interval, undefined, 'ruleBodies.start.interval is undefined');
+  t.ok(toGrammar(g.toRecipe()), 'recipe still works fine');
+
   t.end();
 });
