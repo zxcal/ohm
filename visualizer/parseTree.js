@@ -1,5 +1,5 @@
 /* eslint-env browser */
-/* global CodeMirror, grammar, semantics, showBottomOverlay, hideBottomOverlay */
+/* global CodeMirror, grammar, semantics */
 
 'use strict';
 
@@ -27,68 +27,16 @@
     passThrough = undefined;
   }
 
-  var initElm;
-  var refresh;
-  var tutorialTime;
+  var initElm, refresh;
   document.addEventListener('keydown', function(e) {
-    if (tutorialTime) {
-      clearTimeout(tutorialTime);
-    }
-
     if (e.keyCode === 90) {
       initElm.zoomKey = true;
-      tutorialTime = setTimeout(function() {
-        $('#bottomSection .overlay').textContent = 'select node to zoom in';
-        if (initElm.zoomStack.length !== 0) {
-          $('#bottomSection .overlay').textContent += '\nclick root or ↺ to zoom out';
-        }
-        showBottomOverlay();
-      }, 500);
-    } else if (e.keyCode !== 83 && e.metaKey && initElm.operation) {
-      tutorialTime = setTimeout(function() {
-        $('#bottomSection .overlay').textContent = 'select node to open, or close its editor';
-        showBottomOverlay();
-      }, 1000);
-    } else if (e.keyCode === 77) {
-      tutorialTime = setTimeout(function() {
-        if (!initElm.operation) {
-          $('#bottomSection .overlay').textContent = 'Press z to active zoom mode\n' +
-            'Check eval to evaluate the expression\n';
-        } else {
-          $('#bottomSection .overlay').textContent = 'Press z to active zoom mode\n' +
-            'Press command to toggle semantics editor\n';
-        }
-        showBottomOverlay();
-      }, 250);
-    } else {
-      $('#bottomSection .overlay').innerHTML = '';
-      hideBottomOverlay();
     }
   });
   document.addEventListener('keyup', function(e) {
-    $('#bottomSection .overlay').textContent = '';
-    hideBottomOverlay();
-    clearTimeout(tutorialTime);
-    tutorialTime = undefined;
     if (e.keyCode === 90) {
       initElm.zoomKey = false;
     }
-  });
-  document.addEventListener('mousemove', function(e) {
-    if (tutorialTime) {
-      $('#bottomSection .overlay').textContent = '';
-      hideBottomOverlay();
-      clearTimeout(tutorialTime);
-    }
-    tutorialTime = undefined;
-  });
-  document.addEventListener('click', function(e) {
-    if (tutorialTime) {
-      $('#bottomSection .overlay').textContent = '';
-      hideBottomOverlay();
-      clearTimeout(tutorialTime);
-    }
-    tutorialTime = undefined;
   });
 
   function Fail() { }
@@ -270,7 +218,7 @@
 
   function toggleSemanticEditor(el) {
     // if there is no semantic editor associated with the `el`
-    if (el.children.length === 2) {
+    if (el.children.length <= 2) {
       return;
     }
 
@@ -727,7 +675,7 @@
   function createTraceElement(ui, grammar, traceNode, parent, input) {
     var pexpr = traceNode.expr;
     var ruleName = pexpr.ruleName;
-    if (initElm.operation && !resultMap) {
+    if (initElm.operation && initElm.operation.readOnly && !resultMap) {
       populateResult(traceNode, initElm.operation.value);
     }
 
@@ -810,7 +758,8 @@
     label.addEventListener('click', function(e) {
       if (e.altKey && !(e.shiftKey || e.metaKey)) {
         console.log(traceNode);  // eslint-disable-line no-console
-      } else if (e.metaKey && !e.shiftKey && initElm.operation) {
+      } else if (e.metaKey && !e.shiftKey &&
+        initElm.operation && initElm.operation.readOnly) {
         toggleSemanticEditor(wrapper); // cmd + click to open or close semantic editor
         clearMarks();
       } else if (initElm.zoomKey) {
@@ -844,7 +793,8 @@
     });
 
     // Append semantic editor to the node
-    if (initElm.operation && traceNode.succeeded &&
+    if (initElm.operation && initElm.operation.readOnly &&
+      traceNode.succeeded &&
       ruleName && ruleName !== 'spaces') {
       appendSemanticEditor(wrapper, traceNode, clearMarks);
     }
@@ -902,18 +852,27 @@
       }
     });
     newOp.addEventListener('click', function(e) {
-      if (initElm.operation === newOp) {
-        return;
-      }
       if (initElm.operation) {
         initElm.operation.classList.remove('selected');
       }
-      initElm.operation = newOp;
-      newOp.classList.add('selected');
-      if (newOp.value) {
-        refresh(250);
+
+      if (initElm.operation === newOp && newOp.readOnly) {
+        initElm.operation = undefined;
+      } else {
+        initElm.operation = newOp;
+        newOp.classList.add('selected');
       }
+      if (!newOp.readOnly) {
+        newOp.select();
+      }
+
+      refresh(250);
     });
+    if (initElm.operation) {
+      initElm.operation.classList.remove('selected');
+    }
+    initElm.operation = newOp;
+    newOp.classList.add('selected');
     $('#operations').insertBefore(newOp, addOpButton);
   });
 

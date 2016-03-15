@@ -125,6 +125,9 @@
       border: 1px solid red;
       background: rgba(255, 215, 222, 0.63);
     }
+    .pexpr > .label.mark:hover {
+      background: rgb(255, 215, 222);
+    }
     .pexpr > .label.passThrough {
       border-bottom: 1px solid #9E9E9E;
       margin-bottom: 0px;
@@ -187,6 +190,7 @@
       padding: 3px;
       margin-top: 5px;
       margin-right: 10px;
+      margin-left: 10px;
       float: left;
       left: 20px;
       cursor: pointer;
@@ -227,6 +231,7 @@
     }
     textarea.op[readOnly] {
       cursor: pointer;
+      background-color: #EEEEEE;
     }
     textarea.op.selected {
       border-color: #83BFFC;
@@ -368,7 +373,7 @@
       -webkit-box-shadow: 0 1px 0 rgba(255, 255, 255, 0.5) inset;
       outline: none;
       margin-bottom: 5px;
-      margin-top: -1px;
+      margin-top: -5px;
       width: 100%;
     }
     button.saveAction:hover {
@@ -386,6 +391,7 @@
       color: #4CAF50;
       height: 13px;
       margin-top: -1px;
+      margin-bottom: 5px;
     }
     .exampleActionContainer .semanticResult.error {
       background-color: rgb(255, 215, 222);
