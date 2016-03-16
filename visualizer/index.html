@@ -165,25 +165,6 @@
       outline: none;
     }
 
-    #semanticSelecter {
-      position: fixed;
-      bottom: 20px;
-      right: 10px;
-      display: block;
-    }
-    #newAction {
-      display: none;
-      flex-grow: 1;      
-      background-color: white;
-      border-radius: 3px;
-      box-shadow: 0 1px 4px rgba(0, 0, 0, 0.4);
-      margin-top: 7px;
-    }
-    #newAction > * {
-      margin: 3px;
-      float: left;
-    }
-
     #zoom {
       background-color: white;
       border: 0;
@@ -191,19 +172,15 @@
       margin-top: 5px;
       margin-right: 10px;
       margin-left: 10px;
-      float: left;
       left: 20px;
       cursor: pointer;
       font-size: 18px;
       color: black;
       text-align: center;
+      flex-direction: column;
     }
     #zoom:hover {
       font-weight: bold;
-    }
-
-    #visualizerBody {
-      float: left;
     }
 
     #attributes {
@@ -297,8 +274,9 @@
     }
 
     #bottomSection {
+      display: flex;
       flex: 1;
-      flex-direction: column;
+      
       position: relative;
     }
 
@@ -306,16 +284,10 @@
       background-color: white;
       height: 100%;
       left: 0;
-      opacity: 0.6;
+      opacity: 0.4;
       position: absolute;
       top: 0;
       width: 0;
-      vertical-align: middle;
-      display: flex;
-      justify-content: center;
-      align-items: center;
-      font: small-caps bolder 16px/3;
-      white-space: pre;
     }
 
     #grammarContainer,
