@@ -19,16 +19,16 @@ var initElement = {
   zoomStack: [],
   zoomPic: undefined,
   lastEdited: undefined,
-  operation: undefined
+  action: undefined
 };
 
-function init(operation) { // eslint-disable-line no-unused-vars
+function init(action) { // eslint-disable-line no-unused-vars
   initElement = {
     zoomKey: false,
     zoomStack: [],
     zoomPic: undefined,
     lastEdited: undefined,
-    operation: operation
+    action: action
   };
 }
 
@@ -152,7 +152,7 @@ function parseGrammar(source) {
   restoreEditorState(grammarEditor, 'grammar', $('#sampleGrammar'));
 
   inputEditor.on('change', function() {
-    init(initElement.operation);
+    init(initElement.action);
     triggerRefresh(250);
   });
   grammarEditor.on('change', function() {

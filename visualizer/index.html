@@ -206,18 +206,29 @@
       float: left;
     }
 
+    #attributes {
+      position: fixed;
+      bottom: 20px;
+      right: 150px;
+      display: none;
+    }
     #operations {
+      position: fixed;
+      bottom: 20px;
+      right: 15px;
+    }
+
+    #operations, 
+    #attributes {
       background-color: white;
       color: black;
       font-family: Menlo, Monaco, sans-serif;
       font-style: normal;
       border-radius: 3px;
       padding: 2px 6px 1px 6px;
-      position: fixed;
-      bottom: 20px;
-      right: 20px;
     }
-    textarea.op {
+
+    textarea.action {
       padding-top: 1px;
       padding-bottom: 1px;
       margin-bottom: 4px;
@@ -226,20 +237,19 @@
       border-radius: 10px;
       display:block;
       clear:both;
-      float: right;
       text-align: center;
     }
-    textarea.op[readOnly] {
+
+    textarea.action[readOnly] {
       cursor: pointer;
       background-color: #EEEEEE;
     }
-    textarea.op.selected {
+    textarea.action.selected {
       border-color: #83BFFC;
       border-width: 2px;
     }
     #addOperation {
-      float: right;
-      clear: both;
+      clear: right;
     }
 
     #options {
@@ -539,6 +549,7 @@
       display: none;
     }
   </style>
+
 </head>
 <body>
   <div id="topSection">
@@ -551,12 +562,6 @@
       <h2>Grammar</h2>
       <div class="flex-fix"><div class="editorWrapper"></div></div>
     </div>
-<!--     <div id="topSplitter" class="splitter vertical"></div>
-    <div id="semanticsContainer">
-      <h2>Semantics</h2>
-      <div class="flex-fix"><div class="editorWrapper"></div></div>
-    </div>
- -->
   </div>
   <div id="mainSplitter" class="splitter"></div>
   <div id="bottomSection">
@@ -568,9 +573,8 @@
     </div>
   </div>
   <div id="dragOverlay"></div>
-  <div id="operations">
-    <button id="addOperation">Add Operation</button>
-  </div>
+  <div id="attributes"><button id="addAttribute">Add Attribute</button></div>
+  <div id="operations"><button id="addOperation">Add Operation</button></div>
   <div id="options">
     <!-- <label><input type="checkbox" name="showFailures"> Show failures</label> -->
     <label><input type="checkbox" name="eval">eval</label>
@@ -642,6 +646,7 @@ number  (a number)
   <script src="splitters.js"></script>
 
   <script src="../dist/ohm.js"></script>
+  <script src="third_party/bodyGrammar.js"></script>
   <script src="third_party/d3.min.js"></script>
   <script src="third_party/keymaster.js"></script>
   <script src="third_party/codemirror-5.11/lib/codemirror.js"></script>

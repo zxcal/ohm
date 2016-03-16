@@ -1,5 +1,5 @@
 /* eslint-env browser */
-/* global CodeMirror, grammar, semantics */
+/* global CodeMirror, grammar, semantics, funcBodyGrammar */
 
 'use strict';
 
@@ -26,6 +26,11 @@
     todo = undefined;
     passThrough = undefined;
   }
+  function toKey(cstNode) {
+    return cstNode.ctorName + '_from_' +
+      cstNode.interval.startIdx + '_to_' +
+      cstNode.interval.endIdx;
+  }
 
   var initElm, refresh;
   document.addEventListener('keydown', function(e) {
@@ -45,6 +50,13 @@
   };
   var failure = new Fail();
 
+  function ErrorWrapper(expression, e) {
+    this.expression = expression;
+    this.error = e;
+  }
+  ErrorWrapper.prototype.toString = function() {
+    return this.error.message;
+  };
   // DOM Helpers
   // -----------
 
@@ -373,39 +385,41 @@
     if (funcStr.trim().length !== 0) {
       var argStr = '(' + getSemanticArgs(exampleActionContainer.firstChild.firstChild,
         getArgString(getArgExpr(traceNode))) + ')';
+      var bodyMatchResult = funcBodyGrammar.match(funcStr, 'BodyExpression');
+      if (bodyMatchResult.failed()) {
+        funcStr = '{' + funcStr + '}';
+      }
+
       funcStr = '{\n' +
+          '  var ans;\n' +
+          '  var key = toKey(this);\n' +
           '  try {\n' +
-          '    var key = this.ctorName + "_from_" + \n' +
-          '      this.interval.startIdx + "_to_" + \n' +
-          '      this.interval.endIdx;\n' +
-          '    var ans = eval("' + funcStr.replace('\n', '\\n') + '");\n' +
+          '    ans = (() => ' + funcStr + ')();\n' +
+          '    var aChildHasTODO = this.children.some(\n' +
+          '      child => todo && todo.contains(toKey(child)));\n' +
+          '    if (aChildHasTODO) {\n' +
+          '      ans = failure;\n' +
+          '    }\n' +
           '  } catch (error) {\n' +
-          '    if (!todo) {\n' +
-          '      if (!error.expression) {\n' +
-          '        error.expression = key;\n' +
+          '    if (todo) {\n' +
+          '      ans = failure;\n' +
+          '    } else {\n' +
+          '      if (error instanceof Error) {\n' +
+          '        ans = new ErrorWrapper(key, error);\n' +
           '      }\n' +
-          '      resultMap[key] = error;\n' +
+          '      throw ans;\n' +
           '    }\n' +
           '  } finally {\n' +
-          '    if (resultMap[key] instanceof Error) {\n' +
-          '      throw resultMap[key];\n' +
-          '     }\n' +
-          '    if (!ans && todo) {\n' +
-          '      ans = failure;\n' +
-          // '    } else if (!ans) {' +
-          // '      resultMap[key] = new Error("Invalid result: " + ans);\n' +
-          // '      resultMap[key].expression = key;\n' +
-          // '      throw resultMap[key];\n' +
-          '    }\n' +
           '    resultMap[key] = ans;\n' +
-          '    return ans;\n' +
           '  }\n' +
+          '  return ans;\n' +
         '}';
       console.log('function' + argStr + funcStr);  // eslint-disable-line no-console
       func = eval('(function' + argStr + funcStr + ')'); // eslint-disable-line no-eval
     }
-    semantics.getOperation(initElm.operation.value).actionDict[traceNode.expr.ruleName] = func;
-
+    semantics['get' + initElm.action._type](initElm.action.value)
+      .actionDict[traceNode.expr.ruleName] = func;
+    // semantics.getOperation(initElm.action.value).actionDict[traceNode.expr.ruleName] = func;
     clearMarks();
     refresh(250);
     // restoreEditorState(inputEditor, 'input', $('#sampleInput'));
@@ -449,7 +463,8 @@
     var funcObj = Object.create(null);
 
     // TODO: ['get'+actionType](actionName)
-    var actionFn = semantics.getOperation(initElm.operation.value).actionDict[ruleName];
+    var actionFn = semantics['get' + initElm.action._type](initElm.action.value)
+      .actionDict[ruleName];
     if (actionFn) {
       var actionFnStr = actionFn.toString();
       funcObj.args = [];
@@ -458,24 +473,27 @@
           funcObj.args.push(arg.trim());
         });
 
-      var startIdx = actionFnStr.indexOf('var ans = eval("') + 16;
-      var nextIdx = actionFnStr.indexOf('");', startIdx);
-      var endIdx;
+      var startIdx = actionFnStr.indexOf('ans = (() => ') + 13;
+      var nextIdx, endIdx;
+      if (actionFnStr[startIdx] === '{') {
+        startIdx++;
+      }
+      nextIdx = actionFnStr.indexOf(')();', startIdx);
       while (nextIdx >= 0) {
         endIdx = nextIdx;
-        nextIdx = actionFnStr.indexOf('");', nextIdx + 3);
+        nextIdx = actionFnStr.indexOf(')();', nextIdx + 4);
       }
-
-      funcObj.body = actionFnStr.substring(startIdx, endIdx).replace('\\n', '\n');
+      if (startIdx === actionFnStr.indexOf('ans = (() => ') + 14) {
+        endIdx--;
+      }
+      funcObj.body = actionFnStr.substring(startIdx, endIdx);
     }
     return funcObj;
   }
 
   function appendSemanticEditor(wrapper, traceNode, clearMarks) {
     var ruleName = traceNode.expr.ruleName;
-    var key = ruleName + '_from_' +
-      traceNode.interval.trimmed().startIdx + '_to_' +
-      traceNode.interval.trimmed().endIdx;
+    var key = toKey(traceNode.cstNode);
 
     var exampleActionContainer = wrapper.appendChild(createElement('.exampleActionContainer'));
     var editorWrap = exampleActionContainer.appendChild(createElement('.editor'));
@@ -521,9 +539,9 @@
         editorWrap.nextElementSibling.textContent = error.message;
       }
     });
-    if (res instanceof Error) {
+    if (res instanceof ErrorWrapper) {
       resultContainer.classList.add('error');
-      resultContainer.textContent = res.message;
+      resultContainer.textContent = res;
       if (res.expression === key) {
         wrapper.children[0].classList.add('mark');
       }
@@ -561,58 +579,56 @@
     }
   }
 
-  function initSemantics(operation) {
-    semantics.addOperation(operation, {
+  function initSemantics(actionType, actionName) {
+    semantics['add' + actionType](actionName, {
       _nonterminal: function(children) {
+        var ans;
+        var key = toKey(this);
         try {
-          var key = this.ctorName + '_from_' +
-            this.interval.startIdx + '_to_' +
-            this.interval.endIdx;
-          var ans;
           if (children.length === 1) {
             if (!passThrough) {
               passThrough = [];
             }
             passThrough.push(key);
-            ans = children[0][operation]();
+            ans = (actionName === 'Attribute' ?
+              children[0][actionName] :
+              children[0][actionName]());
           } else {
             if (!todo) {
               todo = [];
             }
             todo.push(key);
+            ans = failure;
           }
         } catch (error) {
-          if (!todo) {
-            if (!error.expression) {
-              error.expression = key;
+          if (todo) {
+            ans = failure;
+          } else {
+            if (error instanceof Error) {
+              ans = new ErrorWrapper(key, error);
             }
-            resultMap[key] = error;
+            throw ans;
           }
         } finally {
-          if (resultMap[key] instanceof Error) {
-            throw resultMap[key];
-          }
-          if (!ans && todo) {
-            ans = failure;
-            // } else if (!ans) {
-            //   resultMap[key] = new Error('Invalid result: ' + ans);
-            //   resultMap[key].expression = key;
-            //   throw resultMap[key];
-          }
           resultMap[key] = ans;
-          return ans;
         }
+        return ans;
       }
     });
+    // console.log(actionName, semantics['get' + actionType](actionName).actionDict);
   }
 
-  function populateResult(traceNode, operation) {
+  function populateResult(traceNode, actionType, actionName) {
     resultMap = {};
-    if (!semantics.getOperation(operation)) {
-      initSemantics(operation);
+    if (!semantics['get' + actionType](actionName)) {
+      initSemantics(actionType, actionName);
     }
     try {
-      semantics._getSemantics().wrap(traceNode.cstNode)[operation]();
+      if (actionType === 'Operation') {
+        semantics._getSemantics().wrap(traceNode.cstNode)[actionName]();
+      } else {
+        // semantics._getSemantics().wrap(traceNode.cstNode)[actionName];
+      }
     } catch (error) { }
   }
 
@@ -675,8 +691,8 @@
   function createTraceElement(ui, grammar, traceNode, parent, input) {
     var pexpr = traceNode.expr;
     var ruleName = pexpr.ruleName;
-    if (initElm.operation && initElm.operation.readOnly && !resultMap) {
-      populateResult(traceNode, initElm.operation.value);
+    if (initElm.action && initElm.action.readOnly && !resultMap) {
+      populateResult(traceNode, initElm.action._type, initElm.action.value);
     }
 
     var wrapper = parent.appendChild(createElement('.pexpr'));
@@ -759,7 +775,7 @@
       if (e.altKey && !(e.shiftKey || e.metaKey)) {
         console.log(traceNode);  // eslint-disable-line no-console
       } else if (e.metaKey && !e.shiftKey &&
-        initElm.operation && initElm.operation.readOnly) {
+        initElm.action && initElm.action.readOnly) {
         toggleSemanticEditor(wrapper); // cmd + click to open or close semantic editor
         clearMarks();
       } else if (initElm.zoomKey) {
@@ -793,7 +809,7 @@
     });
 
     // Append semantic editor to the node
-    if (initElm.operation && initElm.operation.readOnly &&
+    if (initElm.action && initElm.action.readOnly &&
       traceNode.succeeded &&
       ruleName && ruleName !== 'spaces') {
       appendSemanticEditor(wrapper, traceNode, clearMarks);
@@ -825,55 +841,81 @@
   });
 
   var addOpButton = $('#addOperation');
-  addOpButton.addEventListener('click', function(e) {
-    if (addOpButton.previousSibling && addOpButton.previousSibling.value === '') {
+  function addActionNode(actionContainer, actionType, button) {
+    if (actionContainer.children.length > 1 &&
+      !actionContainer.lastChild.previousSibling.readOnly) {
+      var lastActionNode = actionContainer.lastChild.previousSibling;
+      if (initElm.action) {
+        initElm.action.classList.remove('selected');
+      }
+      if (!lastActionNode.classList.contains('selected')) {
+        lastActionNode.classList.add('selected');
+      }
+      initElm.action = lastActionNode;
+      initElm.action._type = 'Operation';
+      lastActionNode.select();
       return;
     }
-    var newOp = createElement('textarea.op');
-    newOp.placeholder = 'New Operation';
-    newOp.cols = ('New Operation').length;
-    newOp.addEventListener('keyup', function(e) {
-      newOp.cols = Math.max(newOp.value.length, ('New Operation').length);
+
+    var newActionNode = createElement('textarea.action');
+    newActionNode.placeholder = 'New ' + actionType;
+    newActionNode.cols = ('New ' + actionType).length;
+    newActionNode.addEventListener('keyup', function(e) {
+      newActionNode.cols = Math.max(newActionNode.value.length, ('New ' + actionType).length);
     });
-    newOp.addEventListener('keypress', function(event) {
+    newActionNode.addEventListener('keypress', function(event) {
       if (event.keyCode === 13) {
-        if (newOp.value) {
+        if (newActionNode.value) {
           try {
-            initSemantics(newOp.value);
-            newOp.readOnly = true;
-            initElm.operation = newOp;
+            initSemantics(actionType, newActionNode.value);
+            newActionNode.readOnly = true;
+            initElm.action = newActionNode;
+            initElm.action._type = actionType;
             refresh(250);
           } catch (error) {
             window.alert(error); // eslint-disable-line no-alert
-            newOp.select();
+            newActionNode.select();
           }
         }
         event.preventDefault();
       }
     });
-    newOp.addEventListener('click', function(e) {
-      if (initElm.operation) {
-        initElm.operation.classList.remove('selected');
+    newActionNode.addEventListener('click', function(e) {
+      if (initElm.action) {
+        initElm.action.classList.remove('selected');
       }
 
-      if (initElm.operation === newOp && newOp.readOnly) {
-        initElm.operation = undefined;
+      if (initElm.action === newActionNode && newActionNode.readOnly) {
+        initElm.action = undefined;
       } else {
-        initElm.operation = newOp;
-        newOp.classList.add('selected');
+        initElm.action = newActionNode;
+        initElm.action._type = actionType;
+        newActionNode.classList.add('selected');
       }
-      if (!newOp.readOnly) {
-        newOp.select();
+      if (!newActionNode.readOnly) {
+        newActionNode.select();
       }
 
       refresh(250);
     });
-    if (initElm.operation) {
-      initElm.operation.classList.remove('selected');
+    if (initElm.action) {
+      initElm.action.classList.remove('selected');
     }
-    initElm.operation = newOp;
-    newOp.classList.add('selected');
-    $('#operations').insertBefore(newOp, addOpButton);
+    initElm.action = newActionNode;
+    initElm.action._type = actionType;
+    newActionNode.classList.add('selected');
+    actionContainer.insertBefore(newActionNode, button);
+  }
+  addOpButton.addEventListener('click', function(e) {
+    addActionNode($('#operations'), 'Operation', addOpButton);
+    return;
+
+  });
+
+  var addAtButton = $('#addAttribute');
+  addAtButton.addEventListener('click', function(e) {
+    addActionNode($('#attributes'), 'Attribute', addAtButton);
+    return;
   });
 
   return function refreshParseTree(ui, grammar, initElement, triggerRefresh, trace, showFailures) {

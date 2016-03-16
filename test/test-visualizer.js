@@ -74,7 +74,8 @@ function serializeTrace(resultNode) {
 var HTML = '<button id="zoom" type="button" hidden></button>' +
            '<div id="visualizerBody"><div id="expandedInput"></div>' +
            '<div id="parseResults"></div></div>' +
-           '<div id="operations"><div id="addOperation"></div></div>' +
+           '<div id="attributes"><button id="addAttribute">Add Attribute</button></div>' +
+           '<div id="operations"><button id="addOperation">Add Operation</button></div>' +
            '<div id="measuringDiv"><div class="pexpr"></div></div>';
 
 test('simple parse tree', function(t) {
