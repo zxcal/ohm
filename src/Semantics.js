@@ -336,7 +336,7 @@ Semantics.prototype.addOperationOrAttribute = function(type, nameAndFormalArgs, 
     this.args = oldArgs;
     return ans;
   }
-
+  this.doIt = doIt;
   if (type === 'operation') {
     this.Wrapper.prototype[name] = doIt;
     this.Wrapper.prototype[name].toString = function() {
@@ -346,6 +346,9 @@ Semantics.prototype.addOperationOrAttribute = function(type, nameAndFormalArgs, 
     Object.defineProperty(this.Wrapper.prototype, name, {get: doIt});
     this.attributeKeys[name] = Symbol();
   }
+};
+
+Semantics.prototype.removeOperationOrAttribute = function(operationOrAttributeName) {
 };
 
 Semantics.prototype.extendOperationOrAttribute = function(type, name, actionDict) {
@@ -458,6 +461,10 @@ Semantics.createSemantics = function(grammar, optSuperSemantics) {
 
   proxy.getAttribute = function(name) {
     return s.attributes[name];
+  };
+
+  proxy.remove = function(operationOrAttributeName) {
+    s.removeOperationOrAttribute.call(s, operationOrAttributeName);
   };
 
   // Make the proxy's toString() work.

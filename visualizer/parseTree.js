@@ -371,20 +371,20 @@
   function getSemanticArgs(header, optArgs) {
     var ans = [];
     for (var i = 1; i < header.children.length; i++) {
-      if (header.children[i].children[1].value) {
-        ans.push(header.children[i].children[1].value);
-      } else {
-        ans.push(optArgs[i - 1]);
-      }
+      ans.push(header.children[i].children[1].value || optArgs[i - 1]);
     }
     return ans;
   }
 
   function saveSemanticAction(traceNode, funcStr, exampleActionContainer, clearMarks) {
     var func;
+    var funcObj = Object.create(null);
+    var ruleName = traceNode.expr.ruleName;
     if (funcStr.trim().length !== 0) {
-      var argStr = '(' + getSemanticArgs(exampleActionContainer.firstChild.firstChild,
-        getArgString(getArgExpr(traceNode))) + ')';
+      funcObj.args = getSemanticArgs(exampleActionContainer.firstChild.firstChild,
+        getArgString(getArgExpr(traceNode)));
+      funcObj.body = funcStr;
+      var argStr = '(' + funcObj.args + ')';
       var bodyMatchResult = funcBodyGrammar.match(funcStr, 'BodyExpression');
       if (bodyMatchResult.failed()) {
         funcStr = '{' + funcStr + '}';
@@ -395,9 +395,9 @@
           '  var key = toKey(this);\n' +
           '  try {\n' +
           '    ans = (() => ' + funcStr + ')();\n' +
-          '    var aChildHasTODO = this.children.some(\n' +
-          '      child => todo && todo.contains(toKey(child)));\n' +
-          '    if (aChildHasTODO) {\n' +
+          '    var aChildFailed = this.children.some(\n' +
+          '      child => resultMap[toKey(child)] === failure);\n' +
+          '    if (aChildFailed) {\n' +
           '      ans = failure;\n' +
           '    }\n' +
           '  } catch (error) {\n' +
@@ -417,9 +417,13 @@
       console.log('function' + argStr + funcStr);  // eslint-disable-line no-console
       func = eval('(function' + argStr + funcStr + ')'); // eslint-disable-line no-eval
     }
-    semantics['get' + initElm.action._type](initElm.action.value)
-      .actionDict[traceNode.expr.ruleName] = func;
+    semantics['get' + initElm.action._type](initElm.action.value).actionDict[ruleName] = func;
+
+    if (!func) {
+      funcObj = Object.create(null);
+    }
     // semantics.getOperation(initElm.action.value).actionDict[traceNode.expr.ruleName] = func;
+    initElm.funcObjMap[ruleName] = funcObj;
     clearMarks();
     refresh(250);
     // restoreEditorState(inputEditor, 'input', $('#sampleInput'));
@@ -460,9 +464,11 @@
   }
 
   function retrieveFunc(ruleName) {
-    var funcObj = Object.create(null);
+    if (initElm.funcObjMap[ruleName]) {
+      return initElm.funcObjMap[ruleName];
+    }
 
-    // TODO: ['get'+actionType](actionName)
+    var funcObj = Object.create(null);
     var actionFn = semantics['get' + initElm.action._type](initElm.action.value)
       .actionDict[ruleName];
     if (actionFn) {
@@ -511,6 +517,7 @@
           // TODO: need to be modified, action type and action name
           saveSemanticAction(traceNode, cm.getValue(), exampleActionContainer, clearMarks);
         } catch (error) {
+          initElm.funcObjMap[ruleName] = undefined;
           editorWrap.nextElementSibling.className = 'semanticResult error';
           editorWrap.nextElementSibling.textContent = error.message;
         }
@@ -590,7 +597,7 @@
               passThrough = [];
             }
             passThrough.push(key);
-            ans = (actionName === 'Attribute' ?
+            ans = (actionType === 'Attribute' ?
               children[0][actionName] :
               children[0][actionName]());
           } else {
@@ -615,7 +622,6 @@
         return ans;
       }
     });
-    // console.log(actionName, semantics['get' + actionType](actionName).actionDict);
   }
 
   function populateResult(traceNode, actionType, actionName) {
@@ -624,12 +630,15 @@
       initSemantics(actionType, actionName);
     }
     try {
+      var nodeWrapper = semantics._getSemantics().wrap(traceNode.cstNode);
       if (actionType === 'Operation') {
-        semantics._getSemantics().wrap(traceNode.cstNode)[actionName]();
+        nodeWrapper[actionName]();
       } else {
-        // semantics._getSemantics().wrap(traceNode.cstNode)[actionName];
+        // nodeWrapper[actionName];
       }
-    } catch (error) { }
+    } catch (error) {
+      // console.log(error);
+    }
   }
 
   function isZoomAt(traceNode) {

@@ -183,20 +183,17 @@
       font-weight: bold;
     }
 
-    #attributes {
+    #actions {
+      display: flex;
+      flex: 1;
       position: fixed;
-      bottom: 20px;
-      right: 150px;
-      display: none;
-    }
-    #operations {
-      position: fixed;
-      bottom: 20px;
       right: 15px;
+      bottom: 20px;
     }
 
-    #operations, 
-    #attributes {
+    #actions .actionEntry {
+      flex-direction: column;
+      align-self: flex-end;
       background-color: white;
       color: black;
       font-family: Menlo, Monaco, sans-serif;
@@ -276,7 +273,6 @@
     #bottomSection {
       display: flex;
       flex: 1;
-      
       position: relative;
     }
 
@@ -518,7 +514,7 @@
     }
     #loadGrammar,
     #saveGrammar {
-      display: none;
+      /*display: none;*/
     }
   </style>
 
@@ -545,13 +541,16 @@
     </div>
   </div>
   <div id="dragOverlay"></div>
-  <div id="attributes"><button id="addAttribute">Add Attribute</button></div>
-  <div id="operations"><button id="addOperation">Add Operation</button></div>
+  <div id="actions">
+  <div id="attributes" class="actionEntry"><button id="addAttribute">Add Attribute</button></div>
+  <div id="operations" class="actionEntry"><button id="addOperation">Add Operation</button></div>
+  <div class="actionEntry"><button id="loadGrammar">Load ...</button></div>
+  <div class="actionEntry"><button id="saveGrammar">Save ...</button></div>
+  </div>
   <div id="options">
     <!-- <label><input type="checkbox" name="showFailures"> Show failures</label> -->
     <label><input type="checkbox" name="eval">eval</label>
-    <button id="loadGrammar">Load ...</button>
-    <button id="saveGrammar">Save ...</button>
+    
   </div>
 
   

@@ -73,7 +73,7 @@ function serve(args) {
     if (args[i] === '-g') {
       nextIsGrammar = true;
     } else if (nextIsGrammar) {
-      grammars[path.basename(args[i])] = args[i];
+      grammars[path.basename(args[i], path.extname(args[i]))] = args[i];
     } else if (args[i][0] === '-') {
       nextIsGrammar = false;
       console.log('Unknown option:', args[i]); // eslint-disable-line no-console

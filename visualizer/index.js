@@ -19,16 +19,18 @@ var initElement = {
   zoomStack: [],
   zoomPic: undefined,
   lastEdited: undefined,
-  action: undefined
+  action: undefined,
+  funcObjMap: Object.create(null)
 };
 
-function init(action) { // eslint-disable-line no-unused-vars
+function init(action, funcObjMap) { // eslint-disable-line no-unused-vars
   initElement = {
     zoomKey: false,
     zoomStack: [],
     zoomPic: undefined,
     lastEdited: undefined,
-    action: action
+    action: action,
+    funcObjMap: funcObjMap
   };
 }
 
@@ -152,13 +154,13 @@ function parseGrammar(source) {
   restoreEditorState(grammarEditor, 'grammar', $('#sampleGrammar'));
 
   inputEditor.on('change', function() {
-    init(initElement.action);
+    init(initElement.action, initElement.funcObjMap);
     triggerRefresh(250);
   });
   grammarEditor.on('change', function() {
     grammarChanged = true;
     hideError('grammar', grammarEditor);
-    init();
+    init(undefined, Object.create(null));
     triggerRefresh(250);
   });
 
