@@ -30,6 +30,14 @@ Wrapper.prototype.toString = function() {
   return '[semantics wrapper for ' + this._node.grammar.name + ']';
 };
 
+Wrapper.prototype.deleteProperty = function(name, semantics, key) {
+  delete this[name];
+  delete this._node[key];
+  this.children.forEach(function(child) {
+    child.deleteProperty(name, semantics, key);
+  });
+};
+
 // Returns the wrapper of the specified child node. Child wrappers are created lazily and cached in
 // the parent wrapper's `_childWrappers` instance variable.
 Wrapper.prototype.child = function(idx) {
@@ -348,7 +356,9 @@ Semantics.prototype.addOperationOrAttribute = function(type, nameAndFormalArgs, 
   }
 };
 
-Semantics.prototype.removeOperationOrAttribute = function(operationOrAttributeName) {
+Semantics.prototype.removeOperationOrAttribute = function(operationOrAttributeName, nodeWrapper) {
+  var attributeKey = this.attributeKeys[operationOrAttributeName];
+  nodeWrapper.deleteProperty(operationOrAttributeName, this, attributeKey);
 };
 
 Semantics.prototype.extendOperationOrAttribute = function(type, name, actionDict) {
@@ -463,8 +473,8 @@ Semantics.createSemantics = function(grammar, optSuperSemantics) {
     return s.attributes[name];
   };
 
-  proxy.remove = function(operationOrAttributeName) {
-    s.removeOperationOrAttribute.call(s, operationOrAttributeName);
+  proxy.remove = function(operationOrAttributeName, nodeWrapper) {
+    s.removeOperationOrAttribute.call(s, operationOrAttributeName, nodeWrapper);
   };
 
   // Make the proxy's toString() work.

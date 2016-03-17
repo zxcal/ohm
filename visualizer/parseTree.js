@@ -406,6 +406,8 @@
           '    } else {\n' +
           '      if (error instanceof Error) {\n' +
           '        ans = new ErrorWrapper(key, error);\n' +
+          '      } else {\n' +
+          '        ans = error;\n' +
           '      }\n' +
           '      throw ans;\n' +
           '    }\n' +
@@ -417,12 +419,13 @@
       console.log('function' + argStr + funcStr);  // eslint-disable-line no-console
       func = eval('(function' + argStr + funcStr + ')'); // eslint-disable-line no-eval
     }
-    semantics['get' + initElm.action._type](initElm.action.value).actionDict[ruleName] = func;
+    semantics['get' + initElm.actionNode._type](initElm.actionNode.value)
+      .actionDict[ruleName] = func;
 
     if (!func) {
       funcObj = Object.create(null);
     }
-    // semantics.getOperation(initElm.action.value).actionDict[traceNode.expr.ruleName] = func;
+    // semantics.getOperation(initElm.actionNode.value).actionDict[traceNode.expr.ruleName] = func;
     initElm.funcObjMap[ruleName] = funcObj;
     clearMarks();
     refresh(250);
@@ -469,7 +472,7 @@
     }
 
     var funcObj = Object.create(null);
-    var actionFn = semantics['get' + initElm.action._type](initElm.action.value)
+    var actionFn = semantics['get' + initElm.actionNode._type](initElm.actionNode.value)
       .actionDict[ruleName];
     if (actionFn) {
       var actionFnStr = actionFn.toString();
@@ -546,6 +549,7 @@
         editorWrap.nextElementSibling.textContent = error.message;
       }
     });
+
     if (res instanceof ErrorWrapper) {
       resultContainer.classList.add('error');
       resultContainer.textContent = res;
@@ -613,6 +617,8 @@
           } else {
             if (error instanceof Error) {
               ans = new ErrorWrapper(key, error);
+            } else {
+              ans = error;
             }
             throw ans;
           }
@@ -634,7 +640,8 @@
       if (actionType === 'Operation') {
         nodeWrapper[actionName]();
       } else {
-        // nodeWrapper[actionName];
+        semantics.remove(actionName, nodeWrapper);
+        nodeWrapper[actionName]; // eslint-disable-line no-unused-expressions
       }
     } catch (error) {
       // console.log(error);
@@ -700,8 +707,8 @@
   function createTraceElement(ui, grammar, traceNode, parent, input) {
     var pexpr = traceNode.expr;
     var ruleName = pexpr.ruleName;
-    if (initElm.action && initElm.action.readOnly && !resultMap) {
-      populateResult(traceNode, initElm.action._type, initElm.action.value);
+    if (initElm.actionNode && initElm.actionNode.readOnly && !resultMap) {
+      populateResult(traceNode, initElm.actionNode._type, initElm.actionNode.value);
     }
 
     var wrapper = parent.appendChild(createElement('.pexpr'));
@@ -784,7 +791,7 @@
       if (e.altKey && !(e.shiftKey || e.metaKey)) {
         console.log(traceNode);  // eslint-disable-line no-console
       } else if (e.metaKey && !e.shiftKey &&
-        initElm.action && initElm.action.readOnly) {
+        initElm.actionNode && initElm.actionNode.readOnly) {
         toggleSemanticEditor(wrapper); // cmd + click to open or close semantic editor
         clearMarks();
       } else if (initElm.zoomKey) {
@@ -818,7 +825,7 @@
     });
 
     // Append semantic editor to the node
-    if (initElm.action && initElm.action.readOnly &&
+    if (initElm.actionNode && initElm.actionNode.readOnly &&
       traceNode.succeeded &&
       ruleName && ruleName !== 'spaces') {
       appendSemanticEditor(wrapper, traceNode, clearMarks);
@@ -854,14 +861,14 @@
     if (actionContainer.children.length > 1 &&
       !actionContainer.lastChild.previousSibling.readOnly) {
       var lastActionNode = actionContainer.lastChild.previousSibling;
-      if (initElm.action) {
-        initElm.action.classList.remove('selected');
+      if (initElm.actionNode) {
+        initElm.actionNode.classList.remove('selected');
       }
       if (!lastActionNode.classList.contains('selected')) {
         lastActionNode.classList.add('selected');
       }
-      initElm.action = lastActionNode;
-      initElm.action._type = 'Operation';
+      initElm.actionNode = lastActionNode;
+      initElm.actionNode._type = 'Operation';
       lastActionNode.select();
       return;
     }
@@ -878,8 +885,10 @@
           try {
             initSemantics(actionType, newActionNode.value);
             newActionNode.readOnly = true;
-            initElm.action = newActionNode;
-            initElm.action._type = actionType;
+            initElm.actionNode = newActionNode;
+            initElm.actionNode._type = actionType;
+            initElm.funcObjMap = Object.create(null);
+            initElm.lastEdited = undefined;
             refresh(250);
           } catch (error) {
             window.alert(error); // eslint-disable-line no-alert
@@ -890,15 +899,20 @@
       }
     });
     newActionNode.addEventListener('click', function(e) {
-      if (initElm.action) {
-        initElm.action.classList.remove('selected');
+      if (initElm.actionNode !== newActionNode) {
+        initElm.funcObjMap = Object.create(null);
+        initElm.lastEdited = undefined;
       }
 
-      if (initElm.action === newActionNode && newActionNode.readOnly) {
-        initElm.action = undefined;
+      if (initElm.actionNode) {
+        initElm.actionNode.classList.remove('selected');
+      }
+
+      if (initElm.actionNode === newActionNode && newActionNode.readOnly) {
+        initElm.actionNode = undefined;
       } else {
-        initElm.action = newActionNode;
-        initElm.action._type = actionType;
+        initElm.actionNode = newActionNode;
+        initElm.actionNode._type = actionType;
         newActionNode.classList.add('selected');
       }
       if (!newActionNode.readOnly) {
@@ -907,11 +921,11 @@
 
       refresh(250);
     });
-    if (initElm.action) {
-      initElm.action.classList.remove('selected');
+    if (initElm.actionNode) {
+      initElm.actionNode.classList.remove('selected');
     }
-    initElm.action = newActionNode;
-    initElm.action._type = actionType;
+    initElm.actionNode = newActionNode;
+    initElm.actionNode._type = actionType;
     newActionNode.classList.add('selected');
     actionContainer.insertBefore(newActionNode, button);
   }

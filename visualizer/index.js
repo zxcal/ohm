@@ -19,7 +19,7 @@ var initElement = {
   zoomStack: [],
   zoomPic: undefined,
   lastEdited: undefined,
-  action: undefined,
+  actionNode: undefined,
   funcObjMap: Object.create(null)
 };
 
@@ -29,7 +29,7 @@ function init(action, funcObjMap) { // eslint-disable-line no-unused-vars
     zoomStack: [],
     zoomPic: undefined,
     lastEdited: undefined,
-    action: action,
+    actionNode: action,
     funcObjMap: funcObjMap
   };
 }
