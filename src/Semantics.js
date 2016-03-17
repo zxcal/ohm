@@ -30,11 +30,11 @@ Wrapper.prototype.toString = function() {
   return '[semantics wrapper for ' + this._node.grammar.name + ']';
 };
 
-Wrapper.prototype.deleteProperty = function(name, semantics, key) {
+Wrapper.prototype.deleteProperty = function(name) {
   delete this[name];
-  delete this._node[key];
+  delete this._node[this._semantics.attributeKeys[name]];
   this.children.forEach(function(child) {
-    child.deleteProperty(name, semantics, key);
+    child.deleteProperty(name);
   });
 };
 
@@ -356,9 +356,30 @@ Semantics.prototype.addOperationOrAttribute = function(type, nameAndFormalArgs, 
   }
 };
 
-Semantics.prototype.removeOperationOrAttribute = function(operationOrAttributeName, nodeWrapper) {
-  var attributeKey = this.attributeKeys[operationOrAttributeName];
-  nodeWrapper.deleteProperty(operationOrAttributeName, this, attributeKey);
+Semantics.prototype.getOperationOrAttribute = function(operationOrAttributeName) {
+  if (operationOrAttributeName in this.attributes) {
+    return this.attributes[operationOrAttributeName];
+  } else if (operationOrAttributeName in this.operations) {
+    return this.operations[operationOrAttributeName];
+  } else {
+    throw new Error('Cannot find operation or attribute has name ' +
+      operationOrAttributeName);
+  }
+};
+
+Semantics.prototype.removeOperationOrAttribute = function(operationOrAttributeName) {
+
+  delete this.Wrapper.prototype[operationOrAttributeName];
+
+  if (operationOrAttributeName in this.attributes) {
+    delete this.attributeKeys[operationOrAttributeName];
+    delete this.attributes[operationOrAttributeName];
+  } else if (operationOrAttributeName in this.operations) {
+    delete this.operations[operationOrAttributeName];
+  } else {
+    throw new Error('Cannot find operation or attribute has name ' +
+      operationOrAttributeName);
+  }
 };
 
 Semantics.prototype.extendOperationOrAttribute = function(type, name, actionDict) {
@@ -465,16 +486,12 @@ Semantics.createSemantics = function(grammar, optSuperSemantics) {
     return proxy;
   };
 
-  proxy.getOperation = function(name) {
-    return s.operations[name];
+  proxy.get = function(operationOrAttributeName) {
+    return s.getOperationOrAttribute.call(s, operationOrAttributeName);
   };
 
-  proxy.getAttribute = function(name) {
-    return s.attributes[name];
-  };
-
-  proxy.remove = function(operationOrAttributeName, nodeWrapper) {
-    s.removeOperationOrAttribute.call(s, operationOrAttributeName, nodeWrapper);
+  proxy.remove = function(operationOrAttributeName) {
+    s.removeOperationOrAttribute.call(s, operationOrAttributeName);
   };
 
   // Make the proxy's toString() work.

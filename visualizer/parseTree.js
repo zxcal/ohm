@@ -419,17 +419,14 @@
       console.log('function' + argStr + funcStr);  // eslint-disable-line no-console
       func = eval('(function' + argStr + funcStr + ')'); // eslint-disable-line no-eval
     }
-    semantics['get' + initElm.actionNode._type](initElm.actionNode.value)
-      .actionDict[ruleName] = func;
+    semantics.get(initElm.actionNode.value).actionDict[ruleName] = func;
 
     if (!func) {
       funcObj = Object.create(null);
     }
-    // semantics.getOperation(initElm.actionNode.value).actionDict[traceNode.expr.ruleName] = func;
     initElm.funcObjMap[ruleName] = funcObj;
     clearMarks();
     refresh(250);
-    // restoreEditorState(inputEditor, 'input', $('#sampleInput'));
   }
 
   function loadHeader(traceNode, header, optArgStr) {
@@ -472,7 +469,7 @@
     }
 
     var funcObj = Object.create(null);
-    var actionFn = semantics['get' + initElm.actionNode._type](initElm.actionNode.value)
+    var actionFn = semantics.get(initElm.actionNode.value)
       .actionDict[ruleName];
     if (actionFn) {
       var actionFnStr = actionFn.toString();
@@ -632,15 +629,18 @@
 
   function populateResult(traceNode, actionType, actionName) {
     resultMap = {};
-    if (!semantics['get' + actionType](actionName)) {
+    try {
+      semantics.get(actionName);
+    } catch (error) {
       initSemantics(actionType, actionName);
     }
+
     try {
       var nodeWrapper = semantics._getSemantics().wrap(traceNode.cstNode);
       if (actionType === 'Operation') {
         nodeWrapper[actionName]();
       } else {
-        semantics.remove(actionName, nodeWrapper);
+        nodeWrapper.deleteProperty(actionName);
         nodeWrapper[actionName]; // eslint-disable-line no-unused-expressions
       }
     } catch (error) {
