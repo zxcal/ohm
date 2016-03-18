@@ -23,14 +23,12 @@ var initElement = {
   funcObjMap: Object.create(null)
 };
 
-function init(action, funcObjMap) { // eslint-disable-line no-unused-vars
+function init() { // eslint-disable-line no-unused-vars
   initElement = {
     zoomKey: false,
     zoomStack: [],
     zoomPic: undefined,
-    lastEdited: undefined,
-    actionNode: action,
-    funcObjMap: funcObjMap
+    lastEdited: undefined
   };
 }
 
@@ -70,10 +68,6 @@ function showError(category, editor, interval, message) {
   errorEl.textContent = message;
   var line = editor.posFromIndex(interval.endIdx).line;
   errorMarks[category].widget = editor.addLineWidget(line, errorEl, {insertAt: 0});
-}
-
-function hideBottomOverlay() {
-  $('#bottomSection .overlay').style.width = 0;
 }
 
 function showBottomOverlay() {
@@ -153,21 +147,17 @@ function parseGrammar(source) {
   restoreEditorState(inputEditor, 'input', $('#sampleInput'));
   restoreEditorState(grammarEditor, 'grammar', $('#sampleGrammar'));
 
-  inputEditor.on('change', function() {
-    init(initElement.action, initElement.funcObjMap);
-    triggerRefresh(250);
-  });
+  inputEditor.on('change', function() { triggerRefresh(250); });
   grammarEditor.on('change', function() {
     grammarChanged = true;
     hideError('grammar', grammarEditor);
-    init(undefined, Object.create(null));
     triggerRefresh(250);
   });
 
   function refresh() {
     hideError('input', inputEditor);
     saveEditorState(inputEditor, 'input');
-
+    init();
     // Refresh the option values.
     for (var i = 0; i < checkboxes.length; ++i) {
       var checkbox = checkboxes[i];
@@ -177,6 +167,8 @@ function parseGrammar(source) {
     if (grammarChanged) {
       grammarChanged = false;
       saveEditorState(grammarEditor, 'grammar');
+      initElement.actionNode = undefined;
+      initElement.funcObjMap = Object.create(null);
 
       var result = parseGrammar(grammarEditor.getValue());
       grammar = result.grammar;
@@ -193,18 +185,8 @@ function parseGrammar(source) {
     if (grammar && grammar.defaultStartRule) {
       // TODO: Move this stuff to parseTree.js. We probably want a proper event system,
       // with events like 'beforeGrammarParse' and 'afterGrammarParse'.
-      hideBottomOverlay();
-      $('#expandedInput').innerHTML = '';
-      $('#parseResults').innerHTML = '';
 
-      var trace = grammar.trace(inputEditor.getValue());
-      if (trace.result.failed()) {
-        // Intervals with start == end won't show up in CodeMirror.
-        var interval = trace.result.getInterval();
-        interval.endIdx += 1;
-        setError('input', inputEditor, interval, 'Expected ' + trace.result.getExpectedText());
-      }
-      refreshParseTree(ui, grammar, initElement, triggerRefresh, trace, options.showFailures);
+      refreshParseTree(ui, grammar, initElement, options.showFailures);
     }
   }
 

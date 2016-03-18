@@ -1,5 +1,5 @@
 /* eslint-env browser */
-/* global CodeMirror, grammar, semantics, funcBodyGrammar */
+/* global CodeMirror, grammar, semantics, funcBodyGrammar, showBottomOverlay, setError */
 
 'use strict';
 
@@ -20,29 +20,14 @@
     BACK: '\u21BA'
   };
 
+  var initElm, ui;
+
   var resultMap, todo, passThrough;
   function initActionLog() {
     resultMap = undefined;
     todo = undefined;
     passThrough = undefined;
   }
-  function toKey(cstNode) {
-    return cstNode.ctorName + '_from_' +
-      cstNode.interval.startIdx + '_to_' +
-      cstNode.interval.endIdx;
-  }
-
-  var initElm, refresh;
-  document.addEventListener('keydown', function(e) {
-    if (e.keyCode === 90) {
-      initElm.zoomKey = true;
-    }
-  });
-  document.addEventListener('keyup', function(e) {
-    if (e.keyCode === 90) {
-      initElm.zoomKey = false;
-    }
-  });
 
   function Fail() { }
   Fail.prototype.toString = function() {
@@ -57,6 +42,56 @@
   ErrorWrapper.prototype.toString = function() {
     return this.error.message;
   };
+
+  function toKey(cstNode, optActionName) {
+    return cstNode.ctorName + '_from_' +
+      cstNode.interval.startIdx + '_to_' +
+      cstNode.interval.endIdx + '_at_' +
+      (optActionName || initElm.actionNode.value);
+  }
+
+  function failed(cstNode) { // eslint-disable-line no-unused-vars
+    var actionNames = semantics.getAllActionNames();
+    var hasFailureAtCSTNode = actionNames.some(function(actionName) {
+      return resultMap[toKey(cstNode, name)] === failure;
+    });
+    return hasFailureAtCSTNode;
+  }
+
+  function noResultForChildrenOf(cstNode) {
+    var hasNoResult = cstNode.children.every(function(child) {
+      return !resultMap.hasOwnProperty(toKey(child, initElm.actionNode.value));
+    });
+    return hasNoResult;
+  }
+
+  function hideBottomOverlay() {
+    $('#bottomSection .overlay').style.width = 0;
+  }
+
+  var refreshTimeout;
+  function triggerRefresh(delay) {
+    showBottomOverlay();
+    if (refreshTimeout) {
+      clearTimeout(refreshTimeout);
+    }
+    refreshTimeout = setTimeout(refreshBottomSection, delay || 0);
+  }
+  function refreshBottomSection() {
+    refreshParseTree(ui, grammar, initElm, false); // eslint-disable-line no-undef
+  }
+
+  document.addEventListener('keydown', function(e) {
+    if (e.keyCode === 90) {
+      initElm.zoomKey = true;
+    }
+  });
+  document.addEventListener('keyup', function(e) {
+    if (e.keyCode === 90) {
+      initElm.zoomKey = false;
+    }
+  });
+
   // DOM Helpers
   // -----------
 
@@ -238,6 +273,12 @@
     if (editor.classList.contains('hidden')) {
       editor.classList.remove('hidden');
       editor.children[1].hidden = false;
+
+      // Refresh CodeMirror
+      var semanticEditor = editor.children[0].lastChild.firstChild.CodeMirror;
+      if (semanticEditor.getValue() && semanticEditor.getValue() !== '') {
+        semanticEditor.refresh();
+      }
     } else {
       editor.classList.add('hidden');
 
@@ -379,6 +420,7 @@
   function saveSemanticAction(traceNode, funcStr, exampleActionContainer, clearMarks) {
     var func;
     var funcObj = Object.create(null);
+    var actionName = initElm.actionNode.value;
     var ruleName = traceNode.expr.ruleName;
     if (funcStr.trim().length !== 0) {
       funcObj.args = getSemanticArgs(exampleActionContainer.firstChild.firstChild,
@@ -392,11 +434,12 @@
 
       funcStr = '{\n' +
           '  var ans;\n' +
-          '  var key = toKey(this);\n' +
+          '  var key = toKey(this, "' + actionName + '");\n' +
           '  try {\n' +
           '    ans = (() => ' + funcStr + ')();\n' +
           '    var aChildFailed = this.children.some(\n' +
-          '      child => resultMap[toKey(child)] === failure);\n' +
+          '      child => failed(child));\n' +
+          // '      child => resultMap[toKey(child, "' + actionName + '")] === failure);\n' +
           '    if (aChildFailed) {\n' +
           '      ans = failure;\n' +
           '    }\n' +
@@ -419,14 +462,14 @@
       console.log('function' + argStr + funcStr);  // eslint-disable-line no-console
       func = eval('(function' + argStr + funcStr + ')'); // eslint-disable-line no-eval
     }
-    semantics.get(initElm.actionNode.value).actionDict[ruleName] = func;
+    semantics.get(actionName).actionDict[ruleName] = func;
 
     if (!func) {
       funcObj = Object.create(null);
     }
     initElm.funcObjMap[ruleName] = funcObj;
     clearMarks();
-    refresh(250);
+    triggerRefresh(250);
   }
 
   function loadHeader(traceNode, header, optArgStr) {
@@ -509,18 +552,21 @@
     // Editor body
     var body = editorWrap.appendChild(createElement('.editorBody'));
     var semanticEditor = CodeMirror(body);
+    function handleSavingEvent(editor) {
+      clearMarks();
+      try {
+        initElm.lastEdited = key;
+        saveSemanticAction(traceNode, editor.getValue(), exampleActionContainer, clearMarks);
+      } catch (error) {
+        initElm.funcObjMap[ruleName] = undefined;
+        editorWrap.nextElementSibling.className = 'semanticResult error';
+        editorWrap.nextElementSibling.textContent = error.message;
+      }
+    }
+
     semanticEditor.setOption('extraKeys', {
       'Cmd-S': function(cm) {
-        clearMarks();
-        try {
-          initElm.lastEdited = key;
-          // TODO: need to be modified, action type and action name
-          saveSemanticAction(traceNode, cm.getValue(), exampleActionContainer, clearMarks);
-        } catch (error) {
-          initElm.funcObjMap[ruleName] = undefined;
-          editorWrap.nextElementSibling.className = 'semanticResult error';
-          editorWrap.nextElementSibling.textContent = error.message;
-        }
+        handleSavingEvent(cm);
       }
     });
 
@@ -533,18 +579,7 @@
     var resultContainer = exampleActionContainer.appendChild(createElement('.semanticResult'));
     var saveButton = exampleActionContainer.appendChild(createElement('button.saveAction', 'save'));
     saveButton.addEventListener('click', function(e) {
-      clearMarks();
-      try {
-        initElm.lastEdited = key;
-        // TODO: need to be modified, action type and action name
-        saveSemanticAction(traceNode,
-          semanticEditor.getValue(),
-          exampleActionContainer,
-          clearMarks);
-      } catch (error) {
-        editorWrap.nextElementSibling.className = 'semanticResult error';
-        editorWrap.nextElementSibling.textContent = error.message;
-      }
+      handleSavingEvent(semanticEditor);
     });
 
     if (res instanceof ErrorWrapper) {
@@ -555,7 +590,7 @@
       }
     } else if (res === failure) {
       resultContainer.classList.add('error');
-      if (todo.includes(key)) {
+      if (todo.includes(key) || noResultForChildrenOf(traceNode.cstNode)) {
         wrapper.children[0].classList.add('mark');
       }
     } else {
@@ -591,7 +626,7 @@
     semantics['add' + actionType](actionName, {
       _nonterminal: function(children) {
         var ans;
-        var key = toKey(this);
+        var key = toKey(this, actionName);
         try {
           if (children.length === 1) {
             if (!passThrough) {
@@ -640,7 +675,7 @@
       if (actionType === 'Operation') {
         nodeWrapper[actionName]();
       } else {
-        nodeWrapper.deleteProperty(actionName);
+        nodeWrapper._forgetMemoizedResultFor(actionName);
         nodeWrapper[actionName]; // eslint-disable-line no-unused-expressions
       }
     } catch (error) {
@@ -690,17 +725,17 @@
       $('#zoom').hidden = true;
       initElm.zoomStack = [];
       clearMarks();
-      refresh(100);
+      triggerRefresh(100);
     });
     zoomElm.addEventListener('mouseover', function(e) {
       initElm.zoomPic = zoomElm._elm;
       clearMarks();
-      refresh();
+      triggerRefresh();
     });
     zoomElm.addEventListener('mouseout', function(e) {
       initElm.zoomPic = undefined;
       clearMarks();
-      refresh();
+      triggerRefresh();
     });
   }
 
@@ -801,7 +836,7 @@
           zoomIn(wrapper, clearMarks, traceNode);
         }
         clearMarks();
-        refresh();
+        triggerRefresh();
       } else if (pexpr.constructor.name !== 'Prim') {
         toggleTraceElement(wrapper);
       }
@@ -856,7 +891,6 @@
     }
   });
 
-  var addOpButton = $('#addOperation');
   function addActionNode(actionContainer, actionType, button) {
     if (actionContainer.children.length > 1 &&
       !actionContainer.lastChild.previousSibling.readOnly) {
@@ -889,7 +923,7 @@
             initElm.actionNode._type = actionType;
             initElm.funcObjMap = Object.create(null);
             initElm.lastEdited = undefined;
-            refresh(250);
+            triggerRefresh(250);
           } catch (error) {
             window.alert(error); // eslint-disable-line no-alert
             newActionNode.select();
@@ -918,8 +952,7 @@
       if (!newActionNode.readOnly) {
         newActionNode.select();
       }
-
-      refresh(250);
+      triggerRefresh(250);
     });
     if (initElm.actionNode) {
       initElm.actionNode.classList.remove('selected');
@@ -929,6 +962,8 @@
     newActionNode.classList.add('selected');
     actionContainer.insertBefore(newActionNode, button);
   }
+
+  var addOpButton = $('#addOperation');
   addOpButton.addEventListener('click', function(e) {
     addActionNode($('#operations'), 'Operation', addOpButton);
     return;
@@ -941,11 +976,23 @@
     return;
   });
 
-  return function refreshParseTree(ui, grammar, initElement, triggerRefresh, trace, showFailures) {
-    refresh = triggerRefresh;
-    initElm = initElement;
+  return function refreshParseTree(currentUI, grammar, initElement, showFailures) {
+    hideBottomOverlay();
+    $('#expandedInput').innerHTML = '';
+    $('#parseResults').innerHTML = '';
 
+    initElm = initElement;
+    ui = currentUI;
+
+    var trace;
     if (initElm.zoomStack.length === 0) {
+      trace = grammar.trace(ui.inputEditor.getValue());
+      if (trace.result.failed()) {
+        // Intervals with start == end won't show up in CodeMirror.
+        var interval = trace.result.getInterval();
+        interval.endIdx += 1;
+        setError('input', ui.inputEditor, interval, 'Expected ' + trace.result.getExpectedText());
+      }
       initElm.zoomStack.push({trace: trace});
     }
 
