@@ -74,6 +74,7 @@ function serializeTrace(resultNode) {
 var HTML = '<button id="zoom" type="button" hidden></button>' +
            '<div id="visualizerBody"><div id="expandedInput"></div>' +
            '<div id="parseResults"></div></div>' +
+           '<div id="bottomSection"><div class="overlay"></div></div>' +
            '<div id="attributes"><button id="addAttribute">Add Attribute</button></div>' +
            '<div id="operations"><button id="addOperation">Add Operation</button></div>' +
            '<div id="measuringDiv"><div class="pexpr"></div></div>';
@@ -82,8 +83,12 @@ test('simple parse tree', function(t) {
   var doc = jsdom.jsdom(HTML);
   var refreshParseTree = parseTree(ohm, doc, null, null);
   var g = ohm.grammar('G { start = letter digit+  -- x\n| digit }');
-
-  refreshParseTree(null, g, {zoomStack: []}, null, g.trace('a99'), false);
+  var ui = {
+    inputEditor: {
+      getValue: function() { return 'a99'; }
+    }
+  };
+  refreshParseTree(ui, g, {zoomStack: []}, false);
   t.equal(doc.querySelector('#expandedInput').textContent, 'a99');
 
   t.deepEqual(serializeTrace(doc.querySelector('#parseResults')), [

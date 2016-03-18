@@ -26,6 +26,26 @@
       /* Must be less than the .splitter z-index, but greater than everything in codemirror.css. */
       z-index: 9;
     }
+    #zoom {
+      background-color: white;
+      border: 0;
+      padding: 3px;
+      margin-top: 5px;
+      margin-right: 10px;
+      margin-left: 10px;
+      left: 20px;
+      cursor: pointer;
+      font-size: 18px;
+      color: black;
+      text-align: center;
+      flex-direction: column;
+    }
+    #zoom:hover {
+      font-weight: bold;
+    }
+    #visualizerBody {
+      overflow: auto;
+    }
     #expandedInputWrapper {
       border-bottom: 1px solid #ddd;
     }
@@ -163,24 +183,6 @@
       height: 12px;
       resize: none;
       outline: none;
-    }
-
-    #zoom {
-      background-color: white;
-      border: 0;
-      padding: 3px;
-      margin-top: 5px;
-      margin-right: 10px;
-      margin-left: 10px;
-      left: 20px;
-      cursor: pointer;
-      font-size: 18px;
-      color: black;
-      text-align: center;
-      flex-direction: column;
-    }
-    #zoom:hover {
-      font-weight: bold;
     }
 
     #actions {
@@ -548,25 +550,8 @@
   <div class="actionEntry"><button id="saveGrammar">Save ...</button></div>
   </div>
   <div id="options">
-    <!-- <label><input type="checkbox" name="showFailures"> Show failures</label> -->
-    <label><input type="checkbox" name="eval">eval</label>
-    
+    <!-- <label><input type="checkbox" name="showFailures"> Show failures</label> -->    
   </div>
-
-  
-  <!-- <div id="semanticSelecter">
-    <input type='text' list='operation'>
-    <button>+</button>
-    <input type='text' list='attribute'>
-    <button>+</button>
-    <datalist id='operation'>
-       <option label='operation' value='eval'>
-    </datalist>
-    <datalist id='attribute'>
-      <option label='attribute' value='name'>
-    </datalist>
-  </div> -->
-
   <div id="measuringDiv">
     <div class="pexpr"></div>
   </div>

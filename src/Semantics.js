@@ -30,11 +30,11 @@ Wrapper.prototype.toString = function() {
   return '[semantics wrapper for ' + this._node.grammar.name + ']';
 };
 
-Wrapper.prototype.deleteProperty = function(name) {
-  delete this[name];
-  delete this._node[this._semantics.attributeKeys[name]];
+Wrapper.prototype._forgetMemoizedResultFor = function(attributeName) {
+  delete this[attributeName];
+  delete this._node[this._semantics.attributeKeys[attributeName]];
   this.children.forEach(function(child) {
-    child.deleteProperty(name);
+    child._forgetMemoizedResultFor(attributeName);
   });
 };
 
@@ -367,19 +367,8 @@ Semantics.prototype.getOperationOrAttribute = function(operationOrAttributeName)
   }
 };
 
-Semantics.prototype.removeOperationOrAttribute = function(operationOrAttributeName) {
-
-  delete this.Wrapper.prototype[operationOrAttributeName];
-
-  if (operationOrAttributeName in this.attributes) {
-    delete this.attributeKeys[operationOrAttributeName];
-    delete this.attributes[operationOrAttributeName];
-  } else if (operationOrAttributeName in this.operations) {
-    delete this.operations[operationOrAttributeName];
-  } else {
-    throw new Error('Cannot find operation or attribute has name ' +
-      operationOrAttributeName);
-  }
+Semantics.prototype.getOperationAndAttributeNames = function() {
+  return Object.keys(this.operations).concat(Object.keys(this.attributes));
 };
 
 Semantics.prototype.extendOperationOrAttribute = function(type, name, actionDict) {
@@ -490,8 +479,8 @@ Semantics.createSemantics = function(grammar, optSuperSemantics) {
     return s.getOperationOrAttribute.call(s, operationOrAttributeName);
   };
 
-  proxy.remove = function(operationOrAttributeName) {
-    s.removeOperationOrAttribute.call(s, operationOrAttributeName);
+  proxy.getAllActionNames = function() {
+    return s.getOperationAndAttributeNames.call(s);
   };
 
   // Make the proxy's toString() work.
