@@ -1,5 +1,5 @@
 /* eslint-env browser */
-/* global CodeMirror, grammar, semantics, funcBodyGrammar, showBottomOverlay, setError */
+/* global CodeMirror, grammar, semantics, funcBodyGrammar */
 
 'use strict';
 
@@ -17,10 +17,11 @@
   var UnicodeChars = {
     HORIZONTAL_ELLIPSIS: '\u2026',
     WHITE_BULLET: '\u25E6',
-    BACK: '\u21BA'
+    ANTICLOCKWISE_OPEN_CIRCLE_ARROW: '\u21BA',
+    TELEPHONE_RECORDER: '\u2315'
   };
 
-  var initElm, ui;
+  var state, ui, rootTrace;
 
   var resultMap, todo, passThrough;
   function initActionLog() {
@@ -47,7 +48,7 @@
     return cstNode.ctorName + '_from_' +
       cstNode.interval.startIdx + '_to_' +
       cstNode.interval.endIdx + '_at_' +
-      (optActionName || initElm.actionNode.value);
+      (optActionName || state.actionNode.value);
   }
 
   function failed(cstNode) { // eslint-disable-line no-unused-vars
@@ -60,37 +61,21 @@
 
   function noResultForChildrenOf(cstNode) {
     var hasNoResult = cstNode.children.every(function(child) {
-      return !resultMap.hasOwnProperty(toKey(child, initElm.actionNode.value));
+      return !resultMap.hasOwnProperty(toKey(child, state.actionNode.value));
     });
     return hasNoResult;
   }
 
-  function hideBottomOverlay() {
-    $('#bottomSection .overlay').style.width = 0;
-  }
-
   var refreshTimeout;
   function triggerRefresh(delay) {
-    showBottomOverlay();
     if (refreshTimeout) {
       clearTimeout(refreshTimeout);
     }
     refreshTimeout = setTimeout(refreshBottomSection, delay || 0);
   }
   function refreshBottomSection() {
-    refreshParseTree(ui, grammar, initElm, false); // eslint-disable-line no-undef
+    refreshParseTree(ui, grammar, rootTrace, false, state); // eslint-disable-line no-undef
   }
-
-  document.addEventListener('keydown', function(e) {
-    if (e.keyCode === 90) {
-      initElm.zoomKey = true;
-    }
-  });
-  document.addEventListener('keyup', function(e) {
-    if (e.keyCode === 90) {
-      initElm.zoomKey = false;
-    }
-  });
 
   // DOM Helpers
   // -----------
@@ -420,7 +405,7 @@
   function saveSemanticAction(traceNode, funcStr, exampleActionContainer, clearMarks) {
     var func;
     var funcObj = Object.create(null);
-    var actionName = initElm.actionNode.value;
+    var actionName = state.actionNode.value;
     var ruleName = traceNode.expr.ruleName;
     if (funcStr.trim().length !== 0) {
       funcObj.args = getSemanticArgs(exampleActionContainer.firstChild.firstChild,
@@ -467,7 +452,7 @@
     if (!func) {
       funcObj = Object.create(null);
     }
-    initElm.funcObjMap[ruleName] = funcObj;
+    state.funcObjMap[ruleName] = funcObj;
     clearMarks();
     triggerRefresh(250);
   }
@@ -507,12 +492,12 @@
   }
 
   function retrieveFunc(ruleName) {
-    if (initElm.funcObjMap[ruleName]) {
-      return initElm.funcObjMap[ruleName];
+    if (state.funcObjMap[ruleName]) {
+      return state.funcObjMap[ruleName];
     }
 
     var funcObj = Object.create(null);
-    var actionFn = semantics.get(initElm.actionNode.value)
+    var actionFn = semantics.get(state.actionNode.value)
       .actionDict[ruleName];
     if (actionFn) {
       var actionFnStr = actionFn.toString();
@@ -555,10 +540,10 @@
     function handleSavingEvent(editor) {
       clearMarks();
       try {
-        initElm.lastEdited = key;
+        state.lastEdited = key;
         saveSemanticAction(traceNode, editor.getValue(), exampleActionContainer, clearMarks);
       } catch (error) {
-        initElm.funcObjMap[ruleName] = undefined;
+        state.funcObjMap[ruleName] = undefined;
         editorWrap.nextElementSibling.className = 'semanticResult error';
         editorWrap.nextElementSibling.textContent = error.message;
       }
@@ -594,8 +579,8 @@
         wrapper.children[0].classList.add('mark');
       }
     } else {
-      if (initElm.lastEdited === key) {
-        initElm.lastEdited = undefined;
+      if (state.lastEdited === key) {
+        state.lastEdited = undefined;
       }
       resultContainer.innerHTML = JSON.stringify(res);
     }
@@ -614,7 +599,7 @@
       resultContainer.hidden = true;
     }
 
-    if (initElm.lastEdited !== key ||
+    if (state.lastEdited !== key ||
       !wrapper.children[0].classList.contains('mark')) {
       exampleActionContainer.classList.add('hidden');
     } else if (resultContainer.hidden) {
@@ -683,95 +668,78 @@
     }
   }
 
-  function isZoomAt(traceNode) {
-    if (initElm.zoomStack.length === 1) {
-      return false;
-    }
-
-    var elm = initElm.zoomStack[initElm.zoomStack.length - 1];
-    return elm.trace === traceNode;
+  function couldZoom(currentRootTrace, traceNode) {
+    return !(currentRootTrace === traceNode ||
+            !(traceNode.expr instanceof ohm.pexprs.Apply));
   }
 
-  function zoomOut(wrapper, traceNode) {
-    wrapper.classList.remove('zoom');
-    wrapper.classList.remove('noBorder');
-    var label = wrapper.firstChild;
-    label.classList.remove('zoomOut');
+  function zoomIn(ui, grammar, rootTrace, showFailures, traceNode) {
+    var zoomNode = $('#zoom');
+    zoomNode.textContent = UnicodeChars.ANTICLOCKWISE_OPEN_CIRCLE_ARROW;
+    zoomNode._trace = traceNode;
+    zoomNode.hidden = false;
 
-    while (!isZoomAt(traceNode)) {
-      initElm.zoomStack.pop();
-    }
-    initElm.zoomStack.pop();
-    if (initElm.zoomStack.length > 0) {
-      $('#zoom')._elm = initElm.zoomStack[initElm.zoomStack.length - 1];
+    zoomNode.addEventListener('click', function(e) {
+      zoomNode.hidden = true;
+      zoomNode._trace = undefined;
+      if (state) {
+        state.zoomState = undefined;
+      }
+      refreshParseTree(ui, grammar, rootTrace, showFailures, state);
+      e.stopPropagation();
+      e.preventDefault();
+    });
+    zoomNode.addEventListener('mouseover', function(e) {
+      var zoomState = {zoomTrace: zoomNode._trace, previewOnly: true};
+      if (state) {
+        state.zoomState = zoomState;
+      } else {
+        state = {zoomState: zoomState};
+      }
+      refreshParseTree(ui, grammar, rootTrace, showFailures, state);
+      e.stopPropagation();
+      e.preventDefault();
+    });
+    zoomNode.addEventListener('mouseout', function(e) {
+      var zoomState = zoomNode._trace && {zoomTrace: zoomNode._trace};
+      if (state) {
+        state.zoomState = zoomState;
+      } else {
+        state = {zoomState: zoomState};
+      }
+      refreshParseTree(ui, grammar, rootTrace, showFailures, state);
+      e.stopPropagation();
+      e.preventDefault();
+    });
+    if (state) {
+      state.zoomState = {zoomTrace: traceNode};
     } else {
-      $('#zoom').innerHTML = '';
+      state = {zoomState: {zoomTrace: traceNode}};
     }
+    refreshParseTree(ui, grammar, rootTrace, showFailures, state);
   }
 
-  function zoomIn(wrapper, clearMarks, traceNode) {
-    if (isZoomAt(traceNode) || traceNode.result) {
-      return;
-    }
-    wrapper.classList.add('zoom');
-    initElm.zoomStack.push({trace: traceNode});
-
-    var zoomElm = $('#zoom');
-    zoomElm.textContent = UnicodeChars.BACK;
-    zoomElm._elm = initElm.zoomStack[initElm.zoomStack.length - 1];
-
-    zoomElm.addEventListener('click', function(e) {
-      initElm.zoomPic = undefined;
-      $('#zoom').hidden = true;
-      initElm.zoomStack = [];
-      clearMarks();
-      triggerRefresh(100);
-    });
-    zoomElm.addEventListener('mouseover', function(e) {
-      initElm.zoomPic = zoomElm._elm;
-      clearMarks();
-      triggerRefresh();
-    });
-    zoomElm.addEventListener('mouseout', function(e) {
-      initElm.zoomPic = undefined;
-      clearMarks();
-      triggerRefresh();
-    });
-  }
-
-  function createTraceElement(ui, grammar, traceNode, parent, input) {
+  function createTraceElement(ui, grammar, rootTrace, traceNode, parent, input,
+    showFailures, optState) {
     var pexpr = traceNode.expr;
     var ruleName = pexpr.ruleName;
-    if (initElm.actionNode && initElm.actionNode.readOnly && !resultMap) {
-      populateResult(traceNode, initElm.actionNode._type, initElm.actionNode.value);
+    if (optState && optState.actionNode && optState.actionNode.readOnly && !resultMap) {
+      populateResult(traceNode, optState.actionNode._type, optState.actionNode.value);
     }
 
     var wrapper = parent.appendChild(createElement('.pexpr'));
     wrapper.classList.add(pexpr.constructor.name.toLowerCase());
     wrapper.classList.toggle('failed', !traceNode.succeeded);
 
-    if (isZoomAt(traceNode)) {
+    if (optState && optState.zoomState &&
+      optState.zoomState.zoomTrace === traceNode && optState.zoomState.previewOnly) {
       if (input) {
         input.classList.add('highlight');
       }
-      wrapper.classList.add('zoom');
-      if (!initElm.zoomPic) {
-        wrapper.classList.add('noBorder');
-      }
+      wrapper.classList.add('zoomBorder');
     }
 
     var inputMark, grammarMark, defMark;
-    function clearMarks() {
-      if (input) {
-        input.classList.remove('highlight');
-      }
-      inputMark = cmUtil.clearMark(inputMark);
-      grammarMark = cmUtil.clearMark(grammarMark);
-      defMark = cmUtil.clearMark(defMark);
-      ui.grammarEditor.getWrapperElement().classList.remove('highlighting');
-      ui.inputEditor.getWrapperElement().classList.remove('highlighting');
-    }
-
     wrapper.addEventListener('mouseover', function(e) {
 
       if (input) {
@@ -797,7 +765,7 @@
       e.stopPropagation();
     });
 
-    wrapper.addEventListener('mouseout', function(e) {
+    function clearMarks() {
       if (input) {
         input.classList.remove('highlight');
       }
@@ -806,6 +774,9 @@
       defMark = cmUtil.clearMark(defMark);
       ui.grammarEditor.getWrapperElement().classList.remove('highlighting');
       ui.inputEditor.getWrapperElement().classList.remove('highlighting');
+    }
+    wrapper.addEventListener('mouseout', function(e) {
+      clearMarks();
     });
     wrapper._input = input;
 
@@ -822,21 +793,27 @@
       spaces: ruleName === 'spaces'
     });
 
+    var zoomButton = label.appendChild(createElement('button.zoom',
+      UnicodeChars.TELEPHONE_RECORDER + ' zoom'));
+    zoomButton.hidden = true;
+    zoomButton.addEventListener('click', function(e) {
+      var currentRootTrace = optState && optState.zoomState && optState.zoomState.zoomTrace ||
+        rootTrace;
+      if (couldZoom(currentRootTrace, traceNode)) {
+        zoomIn(ui, grammar, rootTrace, showFailures, traceNode);
+        clearMarks();
+      }
+      e.stopPropagation();
+      e.preventDefault();
+    });
+
     label.addEventListener('click', function(e) {
       if (e.altKey && !(e.shiftKey || e.metaKey)) {
         console.log(traceNode);  // eslint-disable-line no-console
       } else if (e.metaKey && !e.shiftKey &&
-        initElm.actionNode && initElm.actionNode.readOnly) {
+        state.actionNode && state.actionNode.readOnly) {
         toggleSemanticEditor(wrapper); // cmd + click to open or close semantic editor
         clearMarks();
-      } else if (initElm.zoomKey) {
-        if (wrapper.classList.contains('zoom')) {
-          zoomOut(wrapper, traceNode);
-        } else {
-          zoomIn(wrapper, clearMarks, traceNode);
-        }
-        clearMarks();
-        triggerRefresh();
       } else if (pexpr.constructor.name !== 'Prim') {
         toggleTraceElement(wrapper);
       }
@@ -848,19 +825,19 @@
     });
 
     label.addEventListener('mouseover', function(e) {
-      if (initElm.zoomKey && isZoomAt(traceNode)) {
-        label.classList.add('zoomOut');
+      var currentRootTrace = optState && optState.zoomState && optState.zoomState.zoomTrace ||
+        rootTrace;
+      if (couldZoom(currentRootTrace, traceNode)) {
+        zoomButton.hidden = false;
       }
     });
 
     label.addEventListener('mouseout', function(e) {
-      if (label.classList.contains('zoomOut')) {
-        label.classList.remove('zoomOut');
-      }
+      zoomButton.hidden = true;
     });
 
     // Append semantic editor to the node
-    if (initElm.actionNode && initElm.actionNode.readOnly &&
+    if (state && state.actionNode && state.actionNode.readOnly &&
       traceNode.succeeded &&
       ruleName && ruleName !== 'spaces') {
       appendSemanticEditor(wrapper, traceNode, clearMarks);
@@ -895,14 +872,14 @@
     if (actionContainer.children.length > 1 &&
       !actionContainer.lastChild.previousSibling.readOnly) {
       var lastActionNode = actionContainer.lastChild.previousSibling;
-      if (initElm.actionNode) {
-        initElm.actionNode.classList.remove('selected');
+      if (state.actionNode) {
+        state.actionNode.classList.remove('selected');
       }
       if (!lastActionNode.classList.contains('selected')) {
         lastActionNode.classList.add('selected');
       }
-      initElm.actionNode = lastActionNode;
-      initElm.actionNode._type = 'Operation';
+      state.actionNode = lastActionNode;
+      state.actionNode._type = 'Operation';
       lastActionNode.select();
       return;
     }
@@ -919,10 +896,10 @@
           try {
             initSemantics(actionType, newActionNode.value);
             newActionNode.readOnly = true;
-            initElm.actionNode = newActionNode;
-            initElm.actionNode._type = actionType;
-            initElm.funcObjMap = Object.create(null);
-            initElm.lastEdited = undefined;
+            state.actionNode = newActionNode;
+            state.actionNode._type = actionType;
+            state.funcObjMap = Object.create(null);
+            state.lastEdited = undefined;
             triggerRefresh(250);
           } catch (error) {
             window.alert(error); // eslint-disable-line no-alert
@@ -933,20 +910,20 @@
       }
     });
     newActionNode.addEventListener('click', function(e) {
-      if (initElm.actionNode !== newActionNode) {
-        initElm.funcObjMap = Object.create(null);
-        initElm.lastEdited = undefined;
+      if (state.actionNode !== newActionNode) {
+        state.funcObjMap = Object.create(null);
+        state.lastEdited = undefined;
       }
 
-      if (initElm.actionNode) {
-        initElm.actionNode.classList.remove('selected');
+      if (state.actionNode) {
+        state.actionNode.classList.remove('selected');
       }
 
-      if (initElm.actionNode === newActionNode && newActionNode.readOnly) {
-        initElm.actionNode = undefined;
+      if (state.actionNode === newActionNode && newActionNode.readOnly) {
+        state.actionNode = undefined;
       } else {
-        initElm.actionNode = newActionNode;
-        initElm.actionNode._type = actionType;
+        state.actionNode = newActionNode;
+        state.actionNode._type = actionType;
         newActionNode.classList.add('selected');
       }
       if (!newActionNode.readOnly) {
@@ -954,11 +931,11 @@
       }
       triggerRefresh(250);
     });
-    if (initElm.actionNode) {
-      initElm.actionNode.classList.remove('selected');
+    if (state.actionNode) {
+      state.actionNode.classList.remove('selected');
     }
-    initElm.actionNode = newActionNode;
-    initElm.actionNode._type = actionType;
+    state.actionNode = newActionNode;
+    state.actionNode._type = actionType;
     newActionNode.classList.add('selected');
     actionContainer.insertBefore(newActionNode, button);
   }
@@ -976,31 +953,19 @@
     return;
   });
 
-  return function refreshParseTree(currentUI, grammar, initElement, showFailures) {
-    hideBottomOverlay();
+  function refreshParseTree(currentUI, grammar, rTrace, showFailures, optState) {
     $('#expandedInput').innerHTML = '';
     $('#parseResults').innerHTML = '';
 
-    initElm = initElement;
+    state = optState;
     ui = currentUI;
+    rootTrace = rTrace;
 
     var trace;
-    if (initElm.zoomStack.length === 0) {
-      trace = grammar.trace(ui.inputEditor.getValue());
-      if (trace.result.failed()) {
-        // Intervals with start == end won't show up in CodeMirror.
-        var interval = trace.result.getInterval();
-        interval.endIdx += 1;
-        setError('input', ui.inputEditor, interval, 'Expected ' + trace.result.getExpectedText());
-      }
-      initElm.zoomStack.push({trace: trace});
-    }
-
-    $('#zoom').hidden = (initElm.zoomStack.length <= 1);
-    if (!initElm.zoomPic && initElm.zoomStack.length > 1) {
-      trace = initElm.zoomStack[initElm.zoomStack.length - 1].trace;
+    if (optState && optState.zoomState && !optState.zoomState.previewOnly) {
+      trace = optState.zoomState.zoomTrace;
     } else {
-      trace = initElm.zoomStack[0].trace;
+      trace = rootTrace;
     }
 
     var inputStack = [$('#expandedInput')];
@@ -1039,7 +1004,8 @@
           }
         }
         var container = containerStack[containerStack.length - 1];
-        var el = createTraceElement(ui, grammar, node, container, childInput);
+        var el = createTraceElement(ui, grammar, rootTrace, node, container, childInput,
+          showFailures, state);
         toggleClasses(el, {
           failed: !node.succeeded,
           hidden: !shouldNodeBeLabeled(node),
@@ -1057,5 +1023,6 @@
       }
     });
     initializeWidths();
-  };
+  }
+  return refreshParseTree;
 });

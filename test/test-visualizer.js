@@ -21,7 +21,7 @@ function label(node) {
   var labelNode = node.firstChild;
   assert(labelNode.classList.contains('label'),
          "Expected node with class 'label', found '" + labelNode.className + "'");
-  return labelNode.textContent;
+  return labelNode.firstChild.textContent;
 }
 
 function flattenParseNodes(nodeOrArray) {
@@ -83,12 +83,8 @@ test('simple parse tree', function(t) {
   var doc = jsdom.jsdom(HTML);
   var refreshParseTree = parseTree(ohm, doc, null, null);
   var g = ohm.grammar('G { start = letter digit+  -- x\n| digit }');
-  var ui = {
-    inputEditor: {
-      getValue: function() { return 'a99'; }
-    }
-  };
-  refreshParseTree(ui, g, {zoomStack: []}, false);
+
+  refreshParseTree(null, g, g.trace('a99'), false);
   t.equal(doc.querySelector('#expandedInput').textContent, 'a99');
 
   t.deepEqual(serializeTrace(doc.querySelector('#parseResults')), [

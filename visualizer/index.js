@@ -14,22 +14,14 @@ var grammarEditor = CodeMirror($('#grammarContainer .editorWrapper'));
 // Expose the grammar globally so that it can easily be accessed from the console.
 var grammar = null;
 var semantics = null; // eslint-disable-line no-unused-vars
-var initElement = {
-  zoomKey: false,
-  zoomStack: [],
-  zoomPic: undefined,
+var initState = {
   lastEdited: undefined,
   actionNode: undefined,
   funcObjMap: Object.create(null)
 };
 
-function init() { // eslint-disable-line no-unused-vars
-  initElement = {
-    zoomKey: false,
-    zoomStack: [],
-    zoomPic: undefined,
-    lastEdited: undefined
-  };
+function init(actionNode, funcObjMap) { // eslint-disable-line no-unused-vars
+  initState.lastEdited = undefined;
 }
 
 // Misc Helpers
@@ -68,6 +60,10 @@ function showError(category, editor, interval, message) {
   errorEl.textContent = message;
   var line = editor.posFromIndex(interval.endIdx).line;
   errorMarks[category].widget = editor.addLineWidget(line, errorEl, {insertAt: 0});
+}
+
+function hideBottomOverlay() {
+  $('#bottomSection .overlay').style.width = 0;
 }
 
 function showBottomOverlay() {
@@ -167,8 +163,8 @@ function parseGrammar(source) {
     if (grammarChanged) {
       grammarChanged = false;
       saveEditorState(grammarEditor, 'grammar');
-      initElement.actionNode = undefined;
-      initElement.funcObjMap = Object.create(null);
+      initState.actionNode = undefined;
+      initState.funcObjMap = Object.create(null);
 
       var result = parseGrammar(grammarEditor.getValue());
       grammar = result.grammar;
@@ -185,8 +181,17 @@ function parseGrammar(source) {
     if (grammar && grammar.defaultStartRule) {
       // TODO: Move this stuff to parseTree.js. We probably want a proper event system,
       // with events like 'beforeGrammarParse' and 'afterGrammarParse'.
+      hideBottomOverlay();
 
-      refreshParseTree(ui, grammar, initElement, options.showFailures);
+      var trace = grammar.trace(inputEditor.getValue());
+      if (trace.result.failed()) {
+        // Intervals with start == end won't show up in CodeMirror.
+        var interval = trace.result.getInterval();
+        interval.endIdx += 1;
+        setError('input', inputEditor, interval, 'Expected ' + trace.result.getExpectedText());
+      }
+
+      refreshParseTree(ui, grammar, trace, options.showFailures, initState);
     }
   }
 
