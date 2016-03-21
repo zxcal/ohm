@@ -427,13 +427,13 @@
       funcObj.args = getSemanticArgs(exampleActionContainer.firstChild.firstChild,
         getArgString(getArgExpr(traceNode)));
       funcObj.body = funcStr;
-      var argStr = '(' + funcObj.args + ')';
+      var argStr = '(' + funcObj.args.join(', ') + ')';
       var bodyMatchResult = funcBodyGrammar.match(funcStr, 'BodyExpression');
       if (bodyMatchResult.failed()) {
         funcStr = '{' + funcStr + '}';
       }
 
-      funcStr = '{\n' +
+      var wrapperStr = ' {\n' +
           '  var ans;\n' +
           '  var key = toKey(this, "' + actionName + '");\n' +
           '  try {\n' +
@@ -460,8 +460,11 @@
           '  }\n' +
           '  return ans;\n' +
         '}';
-      console.log('function' + argStr + funcStr);  // eslint-disable-line no-console
-      func = eval('(function' + argStr + funcStr + ')'); // eslint-disable-line no-eval
+      func = eval('(function' + argStr + wrapperStr + ')'); // eslint-disable-line no-eval
+      func.toString = function() {
+        return argStr + ' => ' + funcStr;
+      };
+      console.log(func);  // eslint-disable-line no-console
     }
     semantics.get(actionName).actionDict[ruleName] = func;
 
@@ -523,20 +526,13 @@
           funcObj.args.push(arg.trim());
         });
 
-      var startIdx = actionFnStr.indexOf('ans = (() => ') + 13;
-      var nextIdx, endIdx;
-      if (actionFnStr[startIdx] === '{') {
-        startIdx++;
+      var startIdx = actionFnStr.indexOf(' => {');
+      if (startIdx === -1) {
+        startIdx = actionFnStr.indexOf(' => ');
+        funcObj.body = actionFnStr.substring(startIdx + 4);
+      } else {
+        funcObj.body = actionFnStr.substring(startIdx + 5, actionFnStr.length - 1);
       }
-      nextIdx = actionFnStr.indexOf(')();', startIdx);
-      while (nextIdx >= 0) {
-        endIdx = nextIdx;
-        nextIdx = actionFnStr.indexOf(')();', nextIdx + 4);
-      }
-      if (startIdx === actionFnStr.indexOf('ans = (() => ') + 14) {
-        endIdx--;
-      }
-      funcObj.body = actionFnStr.substring(startIdx, endIdx);
     }
     return funcObj;
   }
