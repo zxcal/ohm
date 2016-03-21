@@ -279,6 +279,7 @@
       if (semanticEditor.getValue() && semanticEditor.getValue() !== '') {
         semanticEditor.refresh();
       }
+      semanticEditor.focus();
     } else {
       editor.classList.add('hidden');
 
@@ -961,6 +962,7 @@
     initElm.actionNode._type = actionType;
     newActionNode.classList.add('selected');
     actionContainer.insertBefore(newActionNode, button);
+    newActionNode.select();
   }
 
   var addOpButton = $('#addOperation');
