@@ -420,6 +420,7 @@
 
   function saveSemanticAction(traceNode, funcStr, exampleActionContainer, clearMarks) {
     var func;
+    var wrapper;
     var funcObj = Object.create(null);
     var actionName = initElm.actionNode.value;
     var ruleName = traceNode.expr.ruleName;
@@ -429,44 +430,46 @@
       funcObj.body = funcStr;
       var argStr = '(' + funcObj.args.join(', ') + ')';
       var bodyMatchResult = funcBodyGrammar.match(funcStr, 'BodyExpression');
-      if (bodyMatchResult.failed()) {
-        funcStr = '{' + funcStr + '}';
+      if (bodyMatchResult.succeeded()) {
+        funcStr = 'return ' + funcStr + ';';
       }
 
-      var wrapperStr = ' {\n' +
-          '  var ans;\n' +
-          '  var key = toKey(this, "' + actionName + '");\n' +
-          '  try {\n' +
-          '    ans = (() => ' + funcStr + ')();\n' +
-          '    var aChildFailed = this.children.some(\n' +
-          '      child => failed(child));\n' +
-          // '      child => resultMap[toKey(child, "' + actionName + '")] === failure);\n' +
-          '    if (aChildFailed) {\n' +
-          '      ans = failure;\n' +
-          '    }\n' +
-          '  } catch (error) {\n' +
-          '    if (todo) {\n' +
-          '      ans = failure;\n' +
-          '    } else {\n' +
-          '      if (error instanceof Error) {\n' +
-          '        ans = new ErrorWrapper(key, error);\n' +
-          '      } else {\n' +
-          '        ans = error;\n' +
-          '      }\n' +
-          '      throw ans;\n' +
-          '    }\n' +
-          '  } finally {\n' +
-          '    resultMap[key] = ans;\n' +
-          '  }\n' +
-          '  return ans;\n' +
-        '}';
-      func = eval('(function' + argStr + wrapperStr + ')'); // eslint-disable-line no-eval
-      func.toString = function() {
-        return argStr + ' => ' + funcStr;
+      wrapper = function(/* arguments */) {
+        var ans;
+        var key = toKey(this, actionName);
+        try {
+          ans = func.apply(this, arguments);
+          var aChildFailed = this.children.some(
+            child => failed(child)
+            // child => resultMap[toKey(child, actionName)] === failure);
+          );
+          if (aChildFailed) {
+            ans = failure;
+          }
+        } catch (error) {
+          if (todo) {
+            ans = failure;
+          } else {
+            if (error instanceof Error) {
+              ans = new ErrorWrapper(key, error);
+            } else {
+              ans = error;
+            }
+            throw ans;
+          }
+        } finally {
+          resultMap[key] = ans;
+        }
+        return ans;
       };
-      console.log(func);  // eslint-disable-line no-console
+      funcStr = 'function' + argStr + ' {\n' + funcStr + '\n}';
+      func = eval('(' + funcStr + ')'); // eslint-disable-line no-eval
+      wrapper.toString = function() {
+        return funcStr;
+      };
+      console.log(funcStr);  // eslint-disable-line no-console
     }
-    semantics.get(actionName).actionDict[ruleName] = func;
+    semantics.get(actionName).actionDict[ruleName] = wrapper;
 
     if (!func) {
       funcObj = Object.create(null);
@@ -526,12 +529,12 @@
           funcObj.args.push(arg.trim());
         });
 
-      var startIdx = actionFnStr.indexOf(' => {');
-      if (startIdx === -1) {
-        startIdx = actionFnStr.indexOf(' => ');
-        funcObj.body = actionFnStr.substring(startIdx + 4);
-      } else {
-        funcObj.body = actionFnStr.substring(startIdx + 5, actionFnStr.length - 1);
+      var startIdx = actionFnStr.indexOf('\n') + 1;
+      var endIdx = actionFnStr.lastIndexOf('\n');
+      funcObj.body = actionFnStr.substring(startIdx, endIdx);
+      if (funcObj.body.indexOf('return ') === 0) {
+        // remove `return` and trailing `;`
+        funcObj.body = funcObj.body.substring(7, funcObj.body.length - 1);
       }
     }
     return funcObj;
