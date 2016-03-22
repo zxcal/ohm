@@ -878,6 +878,7 @@
 
     // Append semantic editor to the node
     if (optState && optState.actionNode && optState.actionNode.readOnly &&
+      shouldNodeBeLabeled(traceNode) && traceNode.succeeded &&
       !(isPrimitive(traceNode.expr) || ruleName === 'spaces')) {
       appendSemanticEditor(ui, grammar, rootTrace, wrapper, traceNode, clearMarks,
         showFailures, optState);
