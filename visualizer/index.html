@@ -376,7 +376,6 @@
     }
     .exampleActionContainer .semanticResult {
       padding-bottom: 2px;
-      background-color: #efefef;
       font: 12px Monaco, sans-serif;
       text-align: center;
       color: #4CAF50;
@@ -388,6 +387,10 @@
       background-color: rgb(255, 215, 222);
       color: red;
     }
+    .exampleActionContainer .semanticResult.reservedResult {
+      color: #999;
+    }
+
     /*
       Hack to fix a problem with `height: 100%` in flex items.
       See https://github.com/codemirror/CodeMirror/issues/3679
@@ -527,7 +530,7 @@
     }
     #loadGrammar,
     #saveGrammar {
-      /*display: none;*/
+      display: none;
     }
   </style>
 

@@ -368,6 +368,8 @@
       expr = altChildren.filter(function(child) {
         return child.succeeded;
       })[0].expr;
+    } else if (!expr) {
+      expr = traceNode.expr;
     }
     return expr;
   }
@@ -461,8 +463,6 @@
       funcObj = Object.create(null);
     }
     state.funcObjMap[ruleName] = funcObj;
-    clearMarks();
-    triggerRefresh(250);
   }
 
   function loadHeader(traceNode, header, optArgStr) {
@@ -526,7 +526,9 @@
     return funcObj;
   }
 
-  function appendSemanticEditor(wrapper, traceNode, clearMarks) {
+  function appendSemanticEditor(ui, grammar, rootTrace, wrapper, traceNode, clearMarks,
+    showFailures, optState) {
+
     var ruleName = traceNode.expr.ruleName;
     var key = toKey(traceNode.cstNode);
 
@@ -535,16 +537,24 @@
 
     // Editor header
     var header = editorWrap.appendChild(createElement('.editorHeader'));
+
     // Editor body
     var body = editorWrap.appendChild(createElement('.editorBody'));
     var semanticEditor = CodeMirror(body);
     function handleSavingEvent(editor) {
       clearMarks();
       try {
-        state.lastEdited = key;
+        if (!optState) {
+          optState = Object.create(null);
+        }
+        optState.lastEdited = key;
         saveSemanticAction(traceNode, editor.getValue(), exampleActionContainer, clearMarks);
+        refreshParseTree(ui, grammar, rootTrace, showFailures, optState);
+        clearMarks();
       } catch (error) {
-        state.funcObjMap[ruleName] = undefined;
+        if (optState) {
+          optState.funcObjMap[ruleName] = undefined;
+        }
         editorWrap.nextElementSibling.className = 'semanticResult error';
         editorWrap.nextElementSibling.textContent = error.message;
       }
@@ -580,10 +590,27 @@
         wrapper.children[0].classList.add('mark');
       }
     } else {
-      if (state.lastEdited === key) {
-        state.lastEdited = undefined;
+      if (optState && optState.lastEdited === key) {
+        optState.lastEdited = undefined;
       }
-      resultContainer.innerHTML = JSON.stringify(res);
+      if (!res && optState && optState.reservedResultMap &&
+        optState.reservedResultMap.hasOwnProperty(key) &&
+        (funcObj.body || traceNode.cstNode.isIteration())) {
+        resultContainer.innerHTML = optState.reservedResultMap[key];
+        resultContainer.classList.add('reservedResult');
+      } else {
+        if (traceNode.cstNode.isIteration()) {
+          if (traceNode.cstNode.children.length > 0 &&
+            resultMap.hasOwnProperty(toKey(traceNode.cstNode.children[0]))) {
+            res = [];
+            traceNode.cstNode.children.forEach(function(child) {
+              res.push(resultMap[toKey(child)]);
+            });
+            resultMap[key] = res;
+          }
+        }
+        resultContainer.innerHTML = JSON.stringify(res);
+      }
     }
 
     // The result comes from `_nonterminal`
@@ -595,12 +622,12 @@
     // evaluating process haven't get to it
     if (resultContainer.classList.contains('error') ||
       wrapper.children[0].classList.contains('passThrough') ||
-      !resultMap.hasOwnProperty(key)) {
+      (!resultMap.hasOwnProperty(key) && !resultContainer.classList.contains('reservedResult'))) {
       resultContainer.classList.add('hidden');
       resultContainer.hidden = true;
     }
 
-    if (state.lastEdited !== key ||
+    if (optState && optState.lastEdited !== key ||
       !wrapper.children[0].classList.contains('mark')) {
       exampleActionContainer.classList.add('hidden');
     } else if (resultContainer.hidden) {
@@ -619,6 +646,7 @@
               passThrough = [];
             }
             passThrough.push(key);
+
             ans = (actionType === 'Attribute' ?
               children[0][actionName] :
               children[0][actionName]());
@@ -670,11 +698,12 @@
   }
 
   function couldZoom(currentRootTrace, traceNode) {
-    return !(currentRootTrace === traceNode ||
-            !(traceNode.expr instanceof ohm.pexprs.Apply));
+    return currentRootTrace !== traceNode &&
+      traceNode.expr.ruleName !== 'spaces' &&
+      !isPrimitive(traceNode.expr);
   }
 
-  function zoomIn(ui, grammar, rootTrace, showFailures, traceNode) {
+  function zoomIn(ui, grammar, rootTrace, showFailures, traceNode, optState) {
     var zoomNode = $('#zoom');
     zoomNode.textContent = UnicodeChars.ANTICLOCKWISE_OPEN_CIRCLE_ARROW;
     zoomNode._trace = traceNode;
@@ -683,8 +712,10 @@
     zoomNode.addEventListener('click', function(e) {
       zoomNode.hidden = true;
       zoomNode._trace = undefined;
-      if (state) {
-        state.zoomState = undefined;
+      if (optState) {
+        optState.zoomState = undefined;
+      } else {
+        optState = Object.create(null);
       }
       refreshParseTree(ui, grammar, rootTrace, showFailures, state);
       e.stopPropagation();
@@ -692,32 +723,40 @@
     });
     zoomNode.addEventListener('mouseover', function(e) {
       var zoomState = {zoomTrace: zoomNode._trace, previewOnly: true};
-      if (state) {
-        state.zoomState = zoomState;
+      if (optState) {
+        optState.zoomState = zoomState;
       } else {
-        state = {zoomState: zoomState};
+        optState = {zoomState: zoomState};
       }
-      refreshParseTree(ui, grammar, rootTrace, showFailures, state);
+      if (!optState.reservedResultMap) {
+        optState.reservedResultMap = {};
+      }
+      Object.keys(resultMap).forEach(function(key) {
+        optState.reservedResultMap[key] = resultMap[key];
+      });
+      refreshParseTree(ui, grammar, rootTrace, showFailures, optState);
       e.stopPropagation();
       e.preventDefault();
     });
     zoomNode.addEventListener('mouseout', function(e) {
       var zoomState = zoomNode._trace && {zoomTrace: zoomNode._trace};
-      if (state) {
-        state.zoomState = zoomState;
+      if (optState) {
+        optState.zoomState = zoomState;
       } else {
-        state = {zoomState: zoomState};
+        optState = {zoomState: zoomState};
       }
+
       refreshParseTree(ui, grammar, rootTrace, showFailures, state);
       e.stopPropagation();
       e.preventDefault();
     });
-    if (state) {
-      state.zoomState = {zoomTrace: traceNode};
+
+    if (optState) {
+      optState.zoomState = {zoomTrace: traceNode};
     } else {
-      state = {zoomState: {zoomTrace: traceNode}};
+      optState = {zoomState: {zoomTrace: traceNode}};
     }
-    refreshParseTree(ui, grammar, rootTrace, showFailures, state);
+    refreshParseTree(ui, grammar, rootTrace, showFailures, optState);
   }
 
   function createTraceElement(ui, grammar, rootTrace, traceNode, parent, input,
@@ -801,7 +840,7 @@
       var currentRootTrace = optState && optState.zoomState && optState.zoomState.zoomTrace ||
         rootTrace;
       if (couldZoom(currentRootTrace, traceNode)) {
-        zoomIn(ui, grammar, rootTrace, showFailures, traceNode);
+        zoomIn(ui, grammar, rootTrace, showFailures, traceNode, optState);
         clearMarks();
       }
       e.stopPropagation();
@@ -812,7 +851,7 @@
       if (e.altKey && !(e.shiftKey || e.metaKey)) {
         console.log(traceNode);  // eslint-disable-line no-console
       } else if (e.metaKey && !e.shiftKey &&
-        state.actionNode && state.actionNode.readOnly) {
+        optState.actionNode && optState.actionNode.readOnly) {
         toggleSemanticEditor(wrapper); // cmd + click to open or close semantic editor
         clearMarks();
       } else if (pexpr.constructor.name !== 'Prim') {
@@ -838,10 +877,10 @@
     });
 
     // Append semantic editor to the node
-    if (state && state.actionNode && state.actionNode.readOnly &&
-      traceNode.succeeded &&
-      ruleName && ruleName !== 'spaces') {
-      appendSemanticEditor(wrapper, traceNode, clearMarks);
+    if (optState && optState.actionNode && optState.actionNode.readOnly &&
+      !(isPrimitive(traceNode.expr) || ruleName === 'spaces')) {
+      appendSemanticEditor(ui, grammar, rootTrace, wrapper, traceNode, clearMarks,
+        showFailures, optState);
     }
     return wrapper;
   }
@@ -901,7 +940,7 @@
             state.actionNode._type = actionType;
             state.funcObjMap = Object.create(null);
             state.lastEdited = undefined;
-            triggerRefresh(250);
+            triggerRefresh();
           } catch (error) {
             window.alert(error); // eslint-disable-line no-alert
             newActionNode.select();
@@ -910,6 +949,7 @@
         event.preventDefault();
       }
     });
+
     newActionNode.addEventListener('click', function(e) {
       if (state.actionNode !== newActionNode) {
         state.funcObjMap = Object.create(null);
@@ -930,7 +970,7 @@
       if (!newActionNode.readOnly) {
         newActionNode.select();
       }
-      triggerRefresh(250);
+      triggerRefresh();
     });
     if (state.actionNode) {
       state.actionNode.classList.remove('selected');
