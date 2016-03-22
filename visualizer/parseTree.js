@@ -439,10 +439,10 @@
         var key = toKey(this, actionName);
         try {
           ans = func.apply(this, arguments);
-          var aChildFailed = this.children.some(
-            child => failed(child)
-            // child => resultMap[toKey(child, actionName)] === failure);
-          );
+          var aChildFailed = this.children.some(function(child) {
+            return failed(child);
+            // return resultMap[toKey(child, actionName)] === failure;
+          });
           if (aChildFailed) {
             ans = failure;
           }
