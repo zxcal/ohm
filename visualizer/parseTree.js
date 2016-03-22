@@ -264,6 +264,7 @@
       if (semanticEditor.getValue() && semanticEditor.getValue() !== '') {
         semanticEditor.refresh();
       }
+      semanticEditor.focus();
     } else {
       editor.classList.add('hidden');
 
@@ -404,6 +405,7 @@
 
   function saveSemanticAction(traceNode, funcStr, exampleActionContainer, clearMarks) {
     var func;
+    var wrapper;
     var funcObj = Object.create(null);
     var actionName = state.actionNode.value;
     var ruleName = traceNode.expr.ruleName;
@@ -411,43 +413,49 @@
       funcObj.args = getSemanticArgs(exampleActionContainer.firstChild.firstChild,
         getArgString(getArgExpr(traceNode)));
       funcObj.body = funcStr;
-      var argStr = '(' + funcObj.args + ')';
+      var argStr = '(' + funcObj.args.join(', ') + ')';
       var bodyMatchResult = funcBodyGrammar.match(funcStr, 'BodyExpression');
-      if (bodyMatchResult.failed()) {
-        funcStr = '{' + funcStr + '}';
+      if (bodyMatchResult.succeeded()) {
+        funcStr = 'return ' + funcStr + ';';
       }
 
-      funcStr = '{\n' +
-          '  var ans;\n' +
-          '  var key = toKey(this, "' + actionName + '");\n' +
-          '  try {\n' +
-          '    ans = (() => ' + funcStr + ')();\n' +
-          '    var aChildFailed = this.children.some(\n' +
-          '      child => failed(child));\n' +
-          // '      child => resultMap[toKey(child, "' + actionName + '")] === failure);\n' +
-          '    if (aChildFailed) {\n' +
-          '      ans = failure;\n' +
-          '    }\n' +
-          '  } catch (error) {\n' +
-          '    if (todo) {\n' +
-          '      ans = failure;\n' +
-          '    } else {\n' +
-          '      if (error instanceof Error) {\n' +
-          '        ans = new ErrorWrapper(key, error);\n' +
-          '      } else {\n' +
-          '        ans = error;\n' +
-          '      }\n' +
-          '      throw ans;\n' +
-          '    }\n' +
-          '  } finally {\n' +
-          '    resultMap[key] = ans;\n' +
-          '  }\n' +
-          '  return ans;\n' +
-        '}';
-      console.log('function' + argStr + funcStr);  // eslint-disable-line no-console
-      func = eval('(function' + argStr + funcStr + ')'); // eslint-disable-line no-eval
+      wrapper = function(/* arguments */) {
+        var ans;
+        var key = toKey(this, actionName);
+        try {
+          ans = func.apply(this, arguments);
+          var aChildFailed = this.children.some(function(child) {
+            return failed(child);
+            // return resultMap[toKey(child, actionName)] === failure;
+          });
+          if (aChildFailed) {
+            ans = failure;
+          }
+        } catch (error) {
+          if (todo) {
+            ans = failure;
+          } else {
+            if (error instanceof Error) {
+              ans = new ErrorWrapper(key, error);
+            } else {
+              ans = error;
+            }
+            throw ans;
+          }
+        } finally {
+          resultMap[key] = ans;
+        }
+        return ans;
+      };
+      funcStr = 'function' + argStr + ' {\n' + funcStr + '\n}';
+      func = eval('(' + funcStr + ')'); // eslint-disable-line no-eval
+      wrapper.toString = function() {
+        return funcStr;
+      };
+      console.log(funcStr);  // eslint-disable-line no-console
     }
-    semantics.get(actionName).actionDict[ruleName] = func;
+
+    semantics.get(actionName).actionDict[ruleName] = wrapper;
 
     if (!func) {
       funcObj = Object.create(null);
@@ -507,20 +515,13 @@
           funcObj.args.push(arg.trim());
         });
 
-      var startIdx = actionFnStr.indexOf('ans = (() => ') + 13;
-      var nextIdx, endIdx;
-      if (actionFnStr[startIdx] === '{') {
-        startIdx++;
-      }
-      nextIdx = actionFnStr.indexOf(')();', startIdx);
-      while (nextIdx >= 0) {
-        endIdx = nextIdx;
-        nextIdx = actionFnStr.indexOf(')();', nextIdx + 4);
-      }
-      if (startIdx === actionFnStr.indexOf('ans = (() => ') + 14) {
-        endIdx--;
-      }
+      var startIdx = actionFnStr.indexOf('\n') + 1;
+      var endIdx = actionFnStr.lastIndexOf('\n');
       funcObj.body = actionFnStr.substring(startIdx, endIdx);
+      if (funcObj.body.indexOf('return ') === 0) {
+        // remove `return` and trailing `;`
+        funcObj.body = funcObj.body.substring(7, funcObj.body.length - 1);
+      }
     }
     return funcObj;
   }
@@ -938,6 +939,7 @@
     state.actionNode._type = actionType;
     newActionNode.classList.add('selected');
     actionContainer.insertBefore(newActionNode, button);
+    newActionNode.select();
   }
 
   var addOpButton = $('#addOperation');
