@@ -1,4 +1,5 @@
-/* global document, window, grammarEditor, semantics, XMLHttpRequest */
+/* eslint-env browser */
+/* global ohmEditor, grammarEditor, semantics */
 'use strict';
 
 (function setup() {
@@ -38,7 +39,8 @@
         // exclude visualizer's helper actions
         return (action !== '_default') && (action !== '_nonterminal');
       }).forEach(function(action) {
-        strObj[op][action] = actions[action].toString();
+        // FIXME: necessary when saving loaded functions again
+        strObj[op][action] = actions[action].toString().replace('function (', 'function(');
       });
     });
     return strObj;
@@ -51,7 +53,24 @@
   }
 
   function setSemantics(src) {
-    console.log('Installing semantics:', src); // eslint-disable-line no-console
+    // FIXME: A worker would be safer here!
+    var semOps = (function() {
+      var module = {};
+      eval(src); // eslint-disable-line no-eval
+      return module.exports;
+    })();
+
+    if (semOps.operations) {
+      Object.getOwnPropertyNames(semOps.operations).forEach(function(opName) {
+        ohmEditor.addSemanticAction(opName, semOps.operations[opName], 'Operation');
+      });
+    }
+    if (semOps.attributes) {
+      Object.getOwnPropertyNames(semOps.attributes).forEach(function(opName) {
+        ohmEditor.addSemanticAction(opName, semOps.attributes[opName], 'Attribute');
+      });
+    }
+    // refreshBottomSection is done automatically!
   }
 
   document.querySelector('#grammars').style.setProperty('display', 'block');
@@ -73,7 +92,9 @@
 
       grammarEditor.setValue(src);
       getFromURL('../semantics/' + grammar, function(src) {
-        setSemantics(src);
+        setTimeout(function() {
+          setSemantics(src);
+        }, 500); // FIXME: remove this timeout (must be > 250ms of triggerRefresh)
       });
     });
   });

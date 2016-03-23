@@ -1,5 +1,5 @@
 /* eslint-env browser */
-/* global cmUtil, CodeMirror, ohm, refreshParseTree, searchBar, init */
+/* global cmUtil, CodeMirror, ohm, ohmEditor, searchBar, init */
 /* global updateExternalRules, updateRuleHyperlinks */
 
 'use strict';
@@ -191,7 +191,7 @@ function parseGrammar(source) {
         setError('input', inputEditor, interval, 'Expected ' + trace.result.getExpectedText());
       }
 
-      refreshParseTree(ui, grammar, trace, options.showFailures, initState);
+      ohmEditor.refreshParseTree(ui, grammar, trace, options.showFailures, initState);
     }
   }
 

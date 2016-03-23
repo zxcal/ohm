@@ -5,13 +5,14 @@
 
 // Wrap the module in a universal module definition (UMD), allowing us to
 // either include it as a <script> or to `require` it as a CommonJS module.
-(function(root, name, initModule) {
+(function(root, initModule) {
   if (typeof exports === 'object') {
     module.exports = initModule;
   } else {
-    root[name] = initModule(root.ohm, root.document, root.cmUtil, root.d3);
+    root.ohmEditor = root.ohmEditor || {};
+    initModule(root.ohm, root.ohmEditor, root.document, root.cmUtil, root.d3);
   }
-})(this, 'refreshParseTree', function(ohm, document, cmUtil, d3) {
+})(this, function(ohm, ohmEditor, document, cmUtil, d3) {
   var ArrayProto = Array.prototype;
   function $(sel) { return document.querySelector(sel); }
   var UnicodeChars = {
@@ -405,9 +406,67 @@
     return ans;
   }
 
+  function createSemanticsWrapper(func, actionName) {
+    var wrapper = function(/* arguments */) {
+      var ans;
+      var key = toKey(this, actionName);
+      try {
+        ans = func.apply(this, arguments);
+        var aChildFailed = this.children.some(function(child) {
+          return failed(child);
+          // return resultMap[toKey(child, actionName)] === failure;
+        });
+        if (aChildFailed) {
+          ans = failure;
+        }
+      } catch (error) {
+        if (todo) {
+          ans = failure;
+        } else {
+          if (error instanceof Error) {
+            ans = new ErrorWrapper(key, error);
+          } else {
+            ans = error;
+          }
+          throw ans;
+        }
+      } finally {
+        resultMap[key] = ans;
+      }
+      return ans;
+    };
+
+    // fake string representation
+    var funcStr = func.toString();
+    // HACK to remove spaces introduced when pretty-printing and saving
+    var lines = funcStr.split('\n');
+    var indentLen = lines.slice(1, lines.length - 1).reduce(function(min, line) {
+      return Math.min(min, line.match(/^\s*/)[0].length);
+    }, Number.MAX_VALUE);
+    funcStr = lines.map(function(line, idx) {
+      if (line.substr(0, indentLen).trim() === '') {
+        return line.substr(indentLen);
+      } else if (idx === lines.length - 1) {
+        return line.trimLeft();
+      } else {
+        return line;
+      }
+    }).join('\n');
+    // END OF HACK
+    wrapper.toString = function() {
+      return funcStr;
+    };
+
+    // fake number of arguments so Ohm's checkActionDict will be happy
+    var argc = funcStr.substring(funcStr.indexOf('(') + 1, funcStr.indexOf(')'))
+      .split(',').length;
+    Object.defineProperty(wrapper, 'length', {get: function() { return argc; }});
+
+    return wrapper;
+  }
+
   function saveSemanticAction(traceNode, funcStr, exampleActionContainer, clearMarks) {
     var func;
-    var wrapper;
     var funcObj = Object.create(null);
     var actionName = state.actionNode.value;
     var ruleName = traceNode.expr.ruleName;
@@ -421,43 +480,12 @@
         funcStr = 'return ' + funcStr + ';';
       }
 
-      wrapper = function(/* arguments */) {
-        var ans;
-        var key = toKey(this, actionName);
-        try {
-          ans = func.apply(this, arguments);
-          var aChildFailed = this.children.some(function(child) {
-            return failed(child);
-            // return resultMap[toKey(child, actionName)] === failure;
-          });
-          if (aChildFailed) {
-            ans = failure;
-          }
-        } catch (error) {
-          if (todo) {
-            ans = failure;
-          } else {
-            if (error instanceof Error) {
-              ans = new ErrorWrapper(key, error);
-            } else {
-              ans = error;
-            }
-            throw ans;
-          }
-        } finally {
-          resultMap[key] = ans;
-        }
-        return ans;
-      };
       funcStr = 'function' + argStr + ' {\n' + funcStr + '\n}';
       func = eval('(' + funcStr + ')'); // eslint-disable-line no-eval
-      wrapper.toString = function() {
-        return funcStr;
-      };
       console.log(funcStr);  // eslint-disable-line no-console
     }
 
-    semantics.get(actionName).actionDict[ruleName] = wrapper;
+    semantics.get(actionName).actionDict[ruleName] = createSemanticsWrapper(func, actionName);
 
     if (!func) {
       funcObj = Object.create(null);
@@ -909,7 +937,7 @@
     }
   });
 
-  function addActionNode(actionContainer, actionType, button) {
+  function addActionNode(actionContainer, actionType) {
     if (actionContainer.children.length > 1 &&
       !actionContainer.lastChild.previousSibling.readOnly) {
       var lastActionNode = actionContainer.lastChild.previousSibling;
@@ -922,7 +950,7 @@
       state.actionNode = lastActionNode;
       state.actionNode._type = 'Operation';
       lastActionNode.select();
-      return;
+      return lastActionNode;
     }
 
     var newActionNode = createElement('textarea.action');
@@ -931,22 +959,25 @@
     newActionNode.addEventListener('keyup', function(e) {
       newActionNode.cols = Math.max(newActionNode.value.length, ('New ' + actionType).length);
     });
+    newActionNode.save = function() {
+      if (newActionNode.value) {
+        try {
+          initSemantics(actionType, newActionNode.value);
+          newActionNode.readOnly = true;
+          state.actionNode = newActionNode;
+          state.actionNode._type = actionType;
+          state.funcObjMap = Object.create(null);
+          state.lastEdited = undefined;
+          triggerRefresh();
+        } catch (error) {
+          window.alert(error); // eslint-disable-line no-alert
+          newActionNode.select();
+        }
+      }
+    };
     newActionNode.addEventListener('keypress', function(event) {
       if (event.keyCode === 13) {
-        if (newActionNode.value) {
-          try {
-            initSemantics(actionType, newActionNode.value);
-            newActionNode.readOnly = true;
-            state.actionNode = newActionNode;
-            state.actionNode._type = actionType;
-            state.funcObjMap = Object.create(null);
-            state.lastEdited = undefined;
-            triggerRefresh();
-          } catch (error) {
-            window.alert(error); // eslint-disable-line no-alert
-            newActionNode.select();
-          }
-        }
+        newActionNode.save();
         event.preventDefault();
       }
     });
@@ -979,20 +1010,22 @@
     state.actionNode = newActionNode;
     state.actionNode._type = actionType;
     newActionNode.classList.add('selected');
-    actionContainer.insertBefore(newActionNode, button);
+    var lastElem = actionContainer.children[actionContainer.children.length - 1];
+    actionContainer.insertBefore(newActionNode, lastElem);
     newActionNode.select();
+    return newActionNode;
   }
 
   var addOpButton = $('#addOperation');
   addOpButton.addEventListener('click', function(e) {
-    addActionNode($('#operations'), 'Operation', addOpButton);
+    addActionNode($('#operations'), 'Operation');
     return;
 
   });
 
   var addAtButton = $('#addAttribute');
   addAtButton.addEventListener('click', function(e) {
-    addActionNode($('#attributes'), 'Attribute', addAtButton);
+    addActionNode($('#attributes'), 'Attribute');
     return;
   });
 
@@ -1067,5 +1100,21 @@
     });
     initializeWidths();
   }
-  return refreshParseTree;
+
+  ohmEditor.addSemanticAction = function addSemanticAction(opName, actions, type) {
+    // add UI element
+    var node = addActionNode($('#' + type.toLowerCase() + 's'), type);
+    node.value = opName;
+    node.save();
+
+    // add actions to dictionary
+    var op = semantics.get(opName);
+    Object.getOwnPropertyNames(actions).forEach(function(actionName) {
+      op.actionDict[actionName] = createSemanticsWrapper(actions[actionName], opName);
+      retrieveFunc(actionName);
+    });
+  };
+
+  ohmEditor.refreshParseTree = refreshParseTree;
+  ohmEditor.refreshBottomSection = refreshBottomSection;
 });
