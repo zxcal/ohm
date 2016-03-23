@@ -1,5 +1,4 @@
-/* global document, window, grammarEditor, XMLHttpRequest */
-
+/* global document, window, grammarEditor, semantics, XMLHttpRequest */
 'use strict';
 
 (function setup() {
@@ -26,7 +25,39 @@
     httpObj.send(data);
   }
 
+  function getStringifiedActionsFor(type) {
+    // type: operations || attributes
+    var ops = document.querySelectorAll('#' + type + ' .action[readonly]');
+    ops = [].slice.call(ops).map(function(elem) { return elem.value; });
+
+    var strObj = {};
+    ops.forEach(function(op) {
+      var actions = semantics.get(op).actionDict;
+      strObj[op] = {};
+      Object.getOwnPropertyNames(actions).filter(function(action) {
+        // exclude visualizer's helper actions
+        return (action !== '_default') && (action !== '_nonterminal');
+      }).forEach(function(action) {
+        strObj[op][action] = actions[action].toString();
+      });
+    });
+    return strObj;
+  }
+
+  function getSemantics() {
+    var ops = getStringifiedActionsFor('operations');
+    var atts = getStringifiedActionsFor('attributes');
+    return JSON.stringify({operations: ops, attributes: atts});
+  }
+
+  function setSemantics(src) {
+    console.log('Installing semantics:', src); // eslint-disable-line no-console
+  }
+
+  document.querySelector('#grammars').style.setProperty('display', 'block');
+
   var loadedGrammar = 'ohm';
+  var grammarName = document.querySelector('#grammarName');
 
   var loadButton = document.querySelector('#loadGrammar');
   loadButton.addEventListener('click', function(e) {
@@ -37,7 +68,13 @@
 
     getFromURL('../grammars/' + grammar, function(src) {
       loadedGrammar = grammar;
+      grammarName.textContent = grammar;
+      grammarName.classList.remove('unnamed');
+
       grammarEditor.setValue(src);
+      getFromURL('../semantics/' + grammar, function(src) {
+        setSemantics(src);
+      });
     });
   });
 
@@ -50,7 +87,12 @@
 
     postToURL('../grammars/' + grammar, grammarEditor.getValue(), function(response) {
       loadedGrammar = grammar;
-      // console.log(response);
+      grammarName.textContent = grammar;
+      grammarName.classList.remove('unnamed');
+
+      postToURL('../semantics/' + grammar, getSemantics(), function(response) {
+        // console.log(response);
+      });
     });
   });
 })();

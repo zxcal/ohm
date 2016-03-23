@@ -239,6 +239,26 @@
       clear: right;
     }
 
+    #grammars {
+      background-color: white;
+      color: black;
+      font-family: Menlo, Monaco, sans-serif;
+      font-style: normal;
+      border-radius: 3px;
+      padding: 2px 6px 1px 6px;
+      position: fixed;
+      top: 10px;
+      right: 10px;
+      display: none;
+    }
+    #grammars label {
+      font-size: 0.75em;
+    }
+    #grammars label.unnamed {
+      font-style: italic;
+      color: #999;
+    }
+
     #options {
       display: none;
       background-color: white;
@@ -528,10 +548,6 @@
     .hiddenDuringLoading {
       display: none;
     }
-    #loadGrammar,
-    #saveGrammar {
-      display: none;
-    }
   </style>
 
 </head>
@@ -562,12 +578,16 @@
   <div id="actions">
   <div id="attributes" class="actionEntry"><button id="addAttribute">Add Attribute</button></div>
   <div id="operations" class="actionEntry"><button id="addOperation">Add Operation</button></div>
-  <div class="actionEntry"><button id="loadGrammar">Load ...</button></div>
-  <div class="actionEntry"><button id="saveGrammar">Save ...</button></div>
-  </div>
+</div>
   <div id="options">
-    <!-- <label><input type="checkbox" name="showFailures"> Show failures</label> -->    
+    <!-- <label><input type="checkbox" name="showFailures"> Show failures</label> -->
   </div>
+  <div id="grammars">
+    <label id="grammarName" class="unnamed">unnamed grammar</label>
+    <button id="loadGrammar">Load ...</button>
+    <button id="saveGrammar">Save ...</button>
+  </div>
+
   <div id="measuringDiv">
     <div class="pexpr"></div>
   </div>
