@@ -1117,4 +1117,7 @@
 
   ohmEditor.refreshParseTree = refreshParseTree;
   ohmEditor.refreshBottomSection = refreshBottomSection;
+  ohmEditor.getState = function() {
+    return state;
+  };
 });

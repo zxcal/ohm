@@ -70,6 +70,13 @@
         ohmEditor.addSemanticAction(opName, semOps.attributes[opName], 'Attribute');
       });
     }
+
+    // unselect operation/attribute
+    var state = ohmEditor.getState();
+    if (state && state.actionNode) {
+      state.actionNode.click();
+    }
+
     // refreshBottomSection is done automatically!
   }
 
@@ -89,8 +96,8 @@
       loadedGrammar = grammar;
       grammarName.textContent = grammar;
       grammarName.classList.remove('unnamed');
-
       grammarEditor.setValue(src);
+
       getFromURL('../semantics/' + grammar, function(src) {
         setTimeout(function() {
           setSemantics(src);
@@ -116,4 +123,88 @@
       });
     });
   });
+
+  window.onload = function() {
+    function cancel(e) {
+      if (e.preventDefault) {
+        e.preventDefault();
+      }
+      return false;
+    }
+
+    function isGrammarFile(file) {
+      var fileExtension = file.name.substring(file.name.lastIndexOf('.') + 1);
+      return file.type.match(/text\/ohm-js/) || fileExtension === 'ohm';
+    }
+
+    function isSemanticsFile(file) {
+      return file.type.match(/text\/javascript/);
+    }
+
+    function loadGrammar(file) {
+      var fileName = file.name.substring(0, file.name.lastIndexOf('.') || undefined);
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        loadedGrammar = fileName;
+        grammarName.textContent = fileName;
+        grammarName.classList.remove('unnamed');
+        grammarEditor.setValue(reader.result);
+      };
+      reader.readAsText(file);
+    }
+
+    function loadSemantics(file) {
+      var reader = new FileReader();
+      reader.onload = function(e) {
+        setSemantics(reader.result);
+      };
+      reader.readAsText(file);
+    }
+
+    // disable CodeMirrors DnD
+    grammarEditor.setOption('dragDrop', false);
+
+    var grammarEditorWrapper = grammarEditor.display.wrapper.parentNode;
+    grammarEditorWrapper.addEventListener('dragover', cancel);
+    grammarEditorWrapper.addEventListener('dragenter', cancel);
+    grammarEditorWrapper.addEventListener('drop', function(e) {
+      if (e.preventDefault) {
+        e.preventDefault();
+      }
+
+      var grammarFile;
+      var semanticsFile;
+
+      var files = e.dataTransfer.files;
+      for (var i = 0; i < files.length; i++) {
+        var file = files[i];
+        if (isGrammarFile(file)) {
+          if (!grammarFile) {
+            grammarFile = file;
+          } else {
+            // console.log('Can only load one grammar file... skipping ' + file.name);
+          }
+        } else if (isSemanticsFile(file)) {
+          if (!semanticsFile) {
+            semanticsFile = file;
+          } else {
+            // console.log('Can only load one semantics file... skipping ' + file.name);
+          }
+        }
+      }
+
+      if (grammarFile) {
+        loadGrammar(grammarFile);
+        if (semanticsFile) {
+          setTimeout(function() {
+            loadSemantics(semanticsFile);
+          }, 500); // FIXME: remove this timeout (must be > 250ms of triggerRefresh)
+        }
+      } else if (semanticsFile) {
+        loadSemantics(semanticsFile);
+      }
+
+      return false;
+    });
+  };
 })();
