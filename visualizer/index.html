@@ -258,6 +258,9 @@
       font-style: italic;
       color: #999;
     }
+    #downloadGrammar, #downloadSemantics {
+      color: #e0a;
+    }
 
     #options {
       display: none;
@@ -578,6 +581,7 @@
   <div id="actions">
   <div id="attributes" class="actionEntry"><button id="addAttribute">Add Attribute</button></div>
   <div id="operations" class="actionEntry"><button id="addOperation">Add Operation</button></div>
+  <div class="actionEntry"><a id="downloadSemantics" href="#">&#11015;</a></div>
 </div>
   <div id="options">
     <!-- <label><input type="checkbox" name="showFailures"> Show failures</label> -->
@@ -586,6 +590,7 @@
     <label id="grammarName" class="unnamed">unnamed grammar</label>
     <button id="loadGrammar">Load ...</button>
     <button id="saveGrammar">Save ...</button>
+    <a id="downloadGrammar" href="#">&#11015;</a>
   </div>
 
   <div id="measuringDiv">

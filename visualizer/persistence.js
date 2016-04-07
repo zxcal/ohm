@@ -82,7 +82,7 @@
 
   document.querySelector('#grammars').style.setProperty('display', 'block');
 
-  var loadedGrammar = 'ohm';
+  var loadedGrammar = 'unnamed grammar';
   var grammarName = document.querySelector('#grammarName');
 
   var loadButton = document.querySelector('#loadGrammar');
@@ -207,4 +207,39 @@
       return false;
     });
   };
+
+  function prepareGrammarDownload(e) {
+    if (!e.dataTransfer) {
+      return;
+    }
+
+    var rawData = grammarEditor.getValue();
+
+    var mimeType = 'text/ohm-js';
+    var filename = loadedGrammar + '.ohm';
+    var url = 'data:application/stream;base64,' + btoa(rawData);
+
+    var data = [mimeType, filename, url].join(':');
+    e.dataTransfer.setData('DownloadURL', data);
+  }
+
+  function prepareSemanticsDownload(e) {
+    if (!e.dataTransfer) {
+      return;
+    }
+
+    var rawData = getSemantics();
+
+    var mimeType = 'text/javascript';
+    var filename = loadedGrammar + '.ohmjs';
+    var url = 'data:application/stream;base64,' + btoa(rawData);
+
+    var data = [mimeType, filename, url].join(':');
+    e.dataTransfer.setData('DownloadURL', data);
+  }
+
+  document.querySelector('#downloadGrammar').
+    addEventListener('dragstart', prepareGrammarDownload);
+  document.querySelector('#downloadSemantics').
+    addEventListener('dragstart', prepareSemanticsDownload);
 })();
