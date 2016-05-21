@@ -2,32 +2,24 @@
 
 'use strict';
 
-function $(sel) { return document.querySelector(sel); }
-
 (function(root, initModule) {
   if (typeof exports === 'object') {
     module.exports = initModule;
   } else {
-    root.ohmEditor = root.ohmEditor || {};
-    initModule(root.ohm, root.ohmEditor, root.cmUtil, root.CodeMirror);
+    initModule(root.ohm, root.ohmEditor, root.cmUtil);
   }
-})(this, function(ohm, ohmEditor, cmUtil, CodeMirror) {
-  function $$(sel) { return Array.prototype.slice.call(document.querySelectorAll(sel)); }
+})(this, function(ohm, ohmEditor, cmUtil) {
+  var checkboxes;
+  var grammarChanged = true;
+  var inputChanged = true;
 
-  var checkboxes, grammarChanged;
-
-  // EXPORTS
+  // Helpers
   // -------
 
-  ohmEditor.options = {};
-  ohmEditor.ui = {
-    inputEditor: CodeMirror($('#inputContainer .editorWrapper')),
-    grammarEditor: CodeMirror($('#grammarContainer .editorWrapper'))
-  };
-  ohmEditor.grammar = null;
+  function $(sel) { return document.querySelector(sel); }
+  function $$(sel) { return Array.prototype.slice.call(document.querySelectorAll(sel)); }
 
-  ohmEditor.parseGrammar = function() {
-    var source = this.ui.grammarEditor.getValue();
+  function parseGrammar(source) {
     var matchResult = ohm.ohmGrammar.match(source);
     var grammar;
     var err;
@@ -55,96 +47,42 @@ function $(sel) { return document.querySelector(sel); }
       grammar: grammar,
       error: err
     };
-  };
+  }
 
-  ohmEditor.refresh = function() {
-    hideError('input', this.ui.inputEditor);
-    saveEditorState(this.ui.inputEditor, 'input');
+  function refresh() {
+    var grammarEditor = ohmEditor.ui.grammarEditor;
+    var inputEditor = ohmEditor.ui.inputEditor;
+
+    var grammarSource = grammarEditor.getValue();
+    var inputSource = inputEditor.getValue();
+
+    saveEditorState(inputEditor, 'input');
 
     // Refresh the option values.
     for (var i = 0; i < checkboxes.length; ++i) {
       var checkbox = checkboxes[i];
-      this.options[checkbox.name] = checkbox.checked;
+      ohmEditor.options[checkbox.name] = checkbox.checked;
+    }
+
+    if (inputChanged) {
+      inputChanged = false;
+      ohmEditor.emit('change:input', inputSource);
     }
 
     if (grammarChanged) {
       grammarChanged = false;
-      saveEditorState(this.ui.grammarEditor, 'grammar');
+      ohmEditor.emit('change:grammar', grammarSource);
+      saveEditorState(grammarEditor, 'grammar');
 
-      var result = this.parseGrammar();
-      this.grammar = result.grammar;
-      this.updateExternalRules(this.ui.grammarEditor, result.matchResult, this.grammar);
-      this.updateRuleHyperlinks(this.ui.grammarEditor, result.matchResult, this.grammar);
-      if (result.error) {
-        var err = result.error;
-        setError('grammar', this.ui.grammarEditor, err.interval,
-          err.shortMessage || err.message);
-        return;
-      }
+      var result = parseGrammar(grammarSource);
+      ohmEditor.grammar = result.grammar;
+      ohmEditor.emit('parse:grammar', result.matchResult, result.grammar, result.error);
     }
 
-    if (this.grammar && this.grammar.defaultStartRule) {
-      // TODO: Move this stuff to parseTree.js. We probably want a proper event system,
-      // with events like 'beforeGrammarParse' and 'afterGrammarParse'.
-      hideBottomOverlay();
-
-      var trace = this.grammar.trace(this.ui.inputEditor.getValue());
-      if (trace.result.failed()) {
-        // Intervals with start == end won't show up in CodeMirror.
-        var interval = trace.result.getInterval();
-        interval.endIdx += 1;
-        setError('input', this.ui.inputEditor, interval,
-          'Expected ' + trace.result.getExpectedText());
-      }
-
-      this.refreshParseTree(trace, true);
+    if (ohmEditor.grammar && ohmEditor.grammar.defaultStartRule) {
+      var trace = ohmEditor.grammar.trace(inputSource);
+      ohmEditor.emit('parse:input', trace.result, trace);
     }
-  };
-
-  // Misc Helpers
-  // ------------
-
-  var errorMarks = {
-    grammar: null,
-    input: null
-  };
-
-  function hideError(category, editor) {
-    var errInfo = errorMarks[category];
-    if (errInfo) {
-      errInfo.mark.clear();
-      clearTimeout(errInfo.timeout);
-      if (errInfo.widget) {
-        errInfo.widget.clear();
-      }
-      errorMarks[category] = null;
-    }
-  }
-
-  function setError(category, editor, interval, message) {
-    hideError(category, editor);
-
-    errorMarks[category] = {
-      mark: cmUtil.markInterval(editor, interval, 'error-interval', false),
-      timeout: setTimeout(showError.bind(null, category, editor, interval, message), 1500),
-      widget: null
-    };
-  }
-
-  function showError(category, editor, interval, message) {
-    var errorEl = document.createElement('div');
-    errorEl.className = 'error';
-    errorEl.textContent = message;
-    var line = editor.posFromIndex(interval.endIdx).line;
-    errorMarks[category].widget = editor.addLineWidget(line, errorEl, {insertAt: 0});
-  }
-
-  function hideBottomOverlay() {
-    $('#bottomSection .overlay').style.width = 0;
-  }
-
-  function showBottomOverlay() {
-    $('#bottomSection .overlay').style.width = '100%';
   }
 
   function restoreEditorState(editor, key, defaultEl) {
@@ -165,11 +103,10 @@ function $(sel) { return document.querySelector(sel); }
 
   var refreshTimeout;
   function triggerRefresh(delay) {
-    showBottomOverlay();
     if (refreshTimeout) {
       clearTimeout(refreshTimeout);
     }
-    refreshTimeout = setTimeout(ohmEditor.refresh.bind(ohmEditor), delay || 0);
+    refreshTimeout = setTimeout(refresh.bind(ohmEditor), delay || 0);
   }
 
   checkboxes = document.querySelectorAll('#options input[type=checkbox]');
@@ -177,19 +114,17 @@ function $(sel) { return document.querySelector(sel); }
     cb.addEventListener('click', function(e) { triggerRefresh(); });
   });
 
-  ohmEditor.searchBar.initializeForEditor(ohmEditor.ui.inputEditor);
-  ohmEditor.searchBar.initializeForEditor(ohmEditor.ui.grammarEditor);
-
   restoreEditorState(ohmEditor.ui.inputEditor, 'input', $('#sampleInput'));
   restoreEditorState(ohmEditor.ui.grammarEditor, 'grammar', $('#sampleGrammar'));
 
-  ohmEditor.ui.inputEditor.on('change', function() {
-    hideError('input', ohmEditor.ui.inputEditor);
+  ohmEditor.ui.inputEditor.on('change', function(cm) {
+    inputChanged = true;
+    ohmEditor.emit('change:inputEditor', cm);
     triggerRefresh(250);
   });
-  ohmEditor.ui.grammarEditor.on('change', function() {
+  ohmEditor.ui.grammarEditor.on('change', function(cm) {
     grammarChanged = true;
-    hideError('grammar', ohmEditor.ui.grammarEditor);
+    ohmEditor.emit('change:grammarEditor', cm);
     triggerRefresh(250);
   });
 
@@ -203,8 +138,7 @@ function $(sel) { return document.querySelector(sel); }
   ].join('\n'));
   /* eslint-enable no-console */
 
-  grammarChanged = true;
-  ohmEditor.refresh();
+  refresh();
 
   $$('.hiddenDuringLoading').forEach(function(el) {
     el.classList.remove('hiddenDuringLoading');

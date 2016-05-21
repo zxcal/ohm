@@ -1,5 +1,4 @@
 /* eslint-env browser */
-/* global $ */
 
 'use strict';
 
@@ -7,7 +6,6 @@
   if (typeof exports === 'object') {
     module.exports = initModule;
   } else {
-    root.ohmEditor = root.ohmEditor || {};
     initModule(root.ohm, root.ohmEditor);
   }
 })(this, function(ohm, ohmEditor) {
@@ -84,7 +82,7 @@
   // the document, no matter what edits are made.
   function LastLineWidget(editor) {
     this.editor = editor;
-    this.node = $('#protos .externalRules').cloneNode(true);
+    this.node = document.querySelector('#protos .externalRules').cloneNode(true);
     this.widget = null;
 
     // Create a bound version of `_placeWidget` for use with on() and off().
@@ -139,11 +137,9 @@
   // The singleton widget (since there's only one grammar editor).
   var widget;
 
-  // Export: a function to be called when the grammar contents change.
-  ohmEditor.updateExternalRules = function(editor, matchResult, grammar) {
-    if (!widget) {
-      widget = new LastLineWidget(editor);
-    }
-    widget.update(editor, matchResult, grammar);
-  };
+  ohmEditor.addListener('parse:grammar', function(matchResult, grammar, err) {
+    var grammarEditor = ohmEditor.ui.grammarEditor;
+    widget = widget || new LastLineWidget(grammarEditor);
+    widget.update(grammarEditor, matchResult, grammar);
+  });
 });
