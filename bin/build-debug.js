@@ -4,6 +4,8 @@ var browserify = require('browserify');
 var fs = require('fs');
 var path = require('path');
 
+var babelify = require("babelify");
+
 var version = require('../package.json').version;
 
 function scriptrel(relpath) {
@@ -18,7 +20,8 @@ var b = browserify({
     browserifyGlobalOhmVersion: function() {
       return JSON.stringify(version);
     }
-  }
+  },
+  transform: babelify
 });
 
 // Prevent package.json from being included in the bundle -- it is required from version.js, but

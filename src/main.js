@@ -355,7 +355,7 @@ function makeRecipe(recipe) {
 
 // Stuff that users should know about
 // module.exports = {
-export default = {
+export default {
   createNamespace: Namespace.createNamespace,
   grammar: grammar,
   grammars: grammars,
